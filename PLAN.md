@@ -265,7 +265,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       `[from, to)`, every frequency in the key, a chord's degrees respected,
       rests give nothing, a pattern wraps, `checkSong` names each refusal,
       the stock song's first 64 beats join `unchanged.json`.
-- [ ] **7. Player.** `player.ts`. Browser tests on an OfflineAudioContext
+- [x] **7. Player.** `player.ts`. Browser tests on an OfflineAudioContext
       with a stepped `currentTime`: `step` schedules within the lookahead
       and no further, `step(0)` schedules nothing new, a huge dt does not
       burst, `stop` leaves `beat` where it was, and a song played twice

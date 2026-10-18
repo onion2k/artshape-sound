@@ -11,7 +11,7 @@ the configs and `PLAN.md`, because `src/` was empty. Every line below about a mo
 been built yet is the plan's and not yet the code's. Each part of the plan rewrites the lines it makes true, from what it
 built, and says so in its commit. Part 2 rewrote the lines for `patch`, `synth`, `loudness`, the size gate and the
 patch edge cases; part 3 those for the stock patches, the unchanged gate and the fuzzer; part 5 those for `audio`,
-`reverb`, the browser tests and the second size entry; part 6 those for `song`, `songs` and the song in the unchanged gate.
+`reverb`, the browser tests and the second size entry; part 6 those for `song`, `songs` and the song in the unchanged gate; part 7 those for `player`, `schedule` and the player's size entry.
 
 ## Commands
 
@@ -39,13 +39,13 @@ move it, and the commit says why.
 
 ## Layout
 
-All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`), `reverb.ts`, `audio.ts`, `song.ts`, `songs.ts`, and the sheet in `sheet/`; the rest is
+All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`), `reverb.ts`, `audio.ts`, `song.ts`, `songs.ts`, `schedule.ts`, `player.ts`, and the sheet in `sheet/`; the rest is
 the plan's.
 
-- `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`: the thing itself. Pure functions over numbers and
+- `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`, `schedule.ts`: the thing itself. Pure functions over numbers and
   `Float32Array`s, no Web Audio, no clock, no `Math.random`. Chance comes in as an argument, `random?: () => number`.
 - `src/patches.ts`, `songs.ts`: content, the stock patches and the one stock song, `calm`.
-- `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext` (`player.ts` not yet). They take
+- `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext` (`audio.ts` reads the context's clock through `Audio.time`; `player.ts` reads only that, to place a note). They take
   the context as an argument and never read a wall clock. `audio.ts` has the one `Math.random` fallback beside
   `synth.ts`'s, for a game that passes no `random`; the grep test in `test/synth.test.ts` names both.
 - `sheet/`: a dev-only page (`index.html`, `sheet.ts`) to hear the stock sounds, with a slider per field, a seed box and a copy
@@ -67,8 +67,7 @@ random).
 `render(patch, sampleRate, random)` and `impulse(seconds, decay, sampleRate, random)` give samples that a node test reads
 directly. `Audio` takes an `OfflineAudioContext` in a browser test (`test/audio.audio.test.ts`), which plays, renders with
 `startRendering` and reads the channels back; `AudioOptions.destination` points the master gain at an `AnalyserNode` for
-the one test on a real `AudioContext`. `Player` is
-stepped by `step(dt)` with a context whose `currentTime` the test advances. There is no end-to-end test; the library has
+the one test on a real `AudioContext`. `Player` is stepped by `step(dt)`; on an offline context the clock moves only as it renders, so a test either reads what was scheduled by spying on `Audio.play` (`at` is the audio-clock time), or suspends the context at each step's time (`context.suspend`, a multiple of 128 frames), steps, and resumes, to render a song with the clock moving (`test/player.audio.test.ts`). The sums are held under node (`test/player.test.ts` over `src/schedule.ts`). There is no end-to-end test; the library has
 no page of its own but the sheet.
 
 ## Edge cases
@@ -88,7 +87,8 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
   octave), a rest, a note on the range's edge (`[from, to)`), a beat before 0 (chords and patterns go round both ways), a
   range that is not finite (`notes` throws by name), a chord degree past the scale or a descending scale (`checkSong`
   refuses by field)
-- **the player:** `step(0)`, a huge dt, a paused game
+- **the player:** (tested in `test/player.audio.test.ts`) `step(0)` (adds nothing), a huge dt (the beat moves, only a lookahead of notes near it is scheduled, never the skipped music), a paused game (`stop` keeps the beat; the next step goes on from it and plays nothing twice), a note further than two octaves from its voice's patch (played at the edge, `MAX_PITCH`), two players on one `Audio` (buffer names are numbered per player), a bad song or lookahead or dt (refused by name), a disposed `Audio` (`Audio.time` throws, so any step does), a note a frame late (played at once; `at` more than `LATE_TOLERANCE` in the past is refused)
+- **overlapping voices:** Chrome sums a bus's inputs in an order it does not keep, so two renders of voices that overlap differ in the last bit of a float; the tests hold such renders to a part in a million, and byte for byte only where notes do not overlap
 - **a context:** an `OfflineAudioContext` (`resume` is a no-op); Safari's `webkitAudioContext` is the game's to pass
 - **saved:** nothing is saved; a patch and a song are JSON a game may keep, so a field added defaults to today's sound
 - **scale:** many voices at once, which the capacity caps; what a render costs is the bench's
@@ -102,9 +102,11 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 | render time         | a hard budget each (part 8)   | `scripts/bench-baseline.json` (part 8) | ±20%, to be measured               | `scripts/bench.ts`       |
 | gzipped bytes       | measured plus half, per entry | `scripts/size-baseline.json`           | exact                              | `scripts/size.ts`        |
 
-The size gate has two entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; and `src/audio.ts`
-and what it imports (the synth, patch, loudness, reverb), 2517 bytes, budget 3775. An entry is one line in `ENTRIES` in
-`scripts/size.ts`; part 7 adds `src/player.ts`. The plan's guess of under
+The size gate has three entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; `src/audio.ts`
+and what it imports (the synth, patch, loudness, reverb), 2652 bytes, budget 3775; and `src/player.ts`, 1915 bytes,
+budget 2872. The player imports only a constant from `audio.ts`, so esbuild shakes the `Audio` class out of its bundle and
+the figure is the player's own weight (with `song.ts`, `schedule.ts` and what they pull in), not audio plus player. An
+entry is one line in `ENTRIES` in `scripts/size.ts`. The plan's guess of under
 6 KiB for the effects path and 10 KiB for the whole is still a guess until those are measured. The unchanged gate exists: `test/unchanged.test.ts` renders each stock patch at 48000 from seed 20261018, hashes the
 samples (FNV-1a) and holds them to `test/unchanged.json` exactly, and hashes the first 64 beats of `calm` as text, a
 line a note (beat, voice, frequency to six decimals, gain), under `songs`; the patches a song's voices carry are not held; it is in `npm test`, so in the quick check. The
@@ -127,7 +129,7 @@ page (said, not skipped). The pass is `npm run check` green, and the fuzzer over
 
 ## What is not held
 
-- The render-time gate, until part 8 lands; the size gate holds `src/synth.ts` and `src/audio.ts` so far.
+- The render-time gate, until part 8 lands; the size gate holds `src/synth.ts`, `src/audio.ts` and `src/player.ts`.
 - A mutation tool: the hand check alone stands in.
 - CI of any kind (the user chose local checks only), so the checks run only where someone runs them, and the secret
   scan and code scanning that would need it. The dependency audit, licence and unused-dependency scripts: not yet, and for the user to agree an order for.
