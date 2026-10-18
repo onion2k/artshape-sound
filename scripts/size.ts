@@ -9,7 +9,10 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
-const ENTRIES: { entry: string; budget: number }[] = [{ entry: 'src/synth.ts', budget: 1981 }];
+const ENTRIES: { entry: string; budget: number }[] = [
+  { entry: 'src/synth.ts', budget: 1981 },
+  { entry: 'src/audio.ts', budget: 3775 },
+];
 
 const BASELINE = 'scripts/size-baseline.json';
 const update = process.env.SIZE_UPDATE === '1';
