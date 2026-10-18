@@ -1,3 +1,6 @@
 node_modules
 package-lock.json
 PLAN.md
+guardrails
+.agents/skills
+.claude/skills
