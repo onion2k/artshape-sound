@@ -93,6 +93,14 @@ a play button and a copy button. Tuning a sound is: pick the one nearest what yo
 is right, and press copy, which puts the patch on the clipboard as a TypeScript literal (JSON would lose `Infinity`).
 Paste that into your game as a `Patch` and `audio.load` it. The sheet is not part of the package.
 
+    npm run playground
+
+serves a second dev-only page at http://localhost:5183/, for trying the library by hand the way a game uses it: one
+`Audio` over a real `AudioContext` with every stock sound loaded, and `calm` on a `Player` stepped each frame. It has a
+pad for each sound with pitch, pan and gain sliders, a burst past the voice cap, volume and mute, the song played,
+paused and handed a five-second frame, dispose and build again, and a log of what each call did or threw. The context
+is made at load, so a sound played before resume can be heard not to play.
+
 ## Checking it
 
     npm run check:quick   formatting, types, lint and the node tests; the pre-commit hook, about 5 seconds

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>artshape-sound: the playground</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        max-width: 56rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 1rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.5rem;
+      }
+      section {
+        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+      }
+      button,
+      select,
+      input[type='number'] {
+        font: inherit;
+        padding: 0.4rem 0.8rem;
+        min-height: 2.5rem;
+      }
+      input[type='number'] {
+        width: 6rem;
+        padding: 0.35rem;
+      }
+      label {
+        display: grid;
+        grid-template-columns: 5rem 1fr 4rem;
+        gap: 0.5rem;
+        align-items: center;
+        font-size: 0.9rem;
+        min-width: 15rem;
+        flex: 1;
+      }
+      label input[type='range'] {
+        min-width: 0;
+      }
+      label.inline {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        min-width: 0;
+        flex: none;
+      }
+      output,
+      .readout {
+        font-variant-numeric: tabular-nums;
+      }
+      output {
+        text-align: right;
+      }
+      .pads {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+        gap: 0.5rem;
+      }
+      .readout {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        gap: 0.25rem 1rem;
+        font-size: 0.9rem;
+      }
+      #log {
+        font:
+          0.85rem ui-monospace,
+          monospace;
+        max-height: 12rem;
+        overflow: auto;
+        margin: 0;
+        white-space: pre-wrap;
+      }
+      .error {
+        color: #c00;
+      }
+      @media (prefers-color-scheme: dark) {
+        .error {
+          color: #f77;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>artshape-sound: the playground</h1>
+
+    <section>
+      <h2>The context</h2>
+      <div class="row">
+        <button id="resume" type="button">resume</button>
+        <button id="dispose" type="button">dispose</button>
+        <button id="rebuild" type="button">build again</button>
+        <label class="inline"> seed <input id="seed" type="number" min="0" step="1" value="20261018" /> </label>
+        <label class="inline"> capacity <input id="capacity" type="number" min="1" step="1" value="16" /> </label>
+      </div>
+      <div class="readout">
+        <span>state: <b id="state">none</b></span>
+        <span>clock: <b id="clock">0.000</b> s</span>
+        <span>voices: <b id="voices">0</b></span>
+        <span>volume: <b id="volume-read">1</b></span>
+        <span>muted: <b id="muted-read">false</b></span>
+        <span>beat: <b id="beat">0.00</b></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Volume</h2>
+      <div class="row">
+        <label>volume <input id="volume" type="range" min="0" max="1" step="0.01" value="1" /><output>1</output></label>
+        <button id="mute" type="button">mute</button>
+        <button id="bad-volume" type="button">set volume 1.5</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Sounds</h2>
+      <div class="row">
+        <label
+          >pitch <input id="pitch" type="range" min="0.25" max="4" step="0.05" value="1" /><output>1</output></label
+        >
+        <label>pan <input id="pan" type="range" min="-1" max="1" step="0.05" value="0" /><output>0</output></label>
+        <label>gain <input id="gain" type="range" min="0" max="2" step="0.05" value="1" /><output>1</output></label>
+      </div>
+      <div class="row">
+        <label class="inline"><input id="sweep" type="checkbox" /> pan each play across, left to right</label>
+        <label class="inline"> burst <input id="burst" type="number" min="1" max="100" step="1" value="24" /> </label>
+        <select id="burst-sound"></select>
+        <button id="fire-burst" type="button">fire burst</button>
+        <button id="bad-pitch" type="button">play at pitch 5</button>
+        <button id="unknown" type="button">play "nope"</button>
+      </div>
+      <div class="pads" id="pads"></div>
+    </section>
+
+    <section>
+      <h2>Music: calm</h2>
+      <div class="row">
+        <button id="music" type="button">play</button>
+        <button id="restart" type="button">from the start</button>
+        <button id="long-frame" type="button">a 5 s frame</button>
+        <label>speed <input id="speed" type="range" min="0" max="3" step="0.1" value="1" /><output>1</output></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>What happened</h2>
+      <div class="row"><button id="clear-log" type="button">clear</button></div>
+      <pre id="log"></pre>
+    </section>
+
+    <script type="module" src="./playground.ts"></script>
+  </body>
+</html>

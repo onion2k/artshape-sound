@@ -23,7 +23,7 @@ export default tseslint.config(
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
     },
   },
-  { files: ['sheet/**/*.ts'], languageOptions: { globals: { ...globals.browser } } },
+  { files: ['sheet/**/*.ts', 'playground/**/*.ts'], languageOptions: { globals: { ...globals.browser } } },
   { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
   prettier,
 );

@@ -25,6 +25,7 @@ findings and the pin.
     npm test               the node tests, `test/**/*.test.ts`
     npm run test:audio     the audio tests, `test/**/*.audio.test.ts`, in headless Chromium (~2 s)
     npm run sheet          vite on sheet/, http://localhost:5182/: every stock patch with sliders, to be heard in a tab
+    npm run playground     vite on playground/, http://localhost:5183/: Audio and Player on a real context, by hand
     npm run typecheck      strict tsc, no emit
     npm run lint           eslint, the type-aware rules
     npm run format         prettier, writing: by hand, never by the hook
@@ -33,8 +34,8 @@ findings and the pin.
     audit                  `npm audit --audit-level=high`, not yet a script
     updates                a bot for security updates only; versions by hand, monthly, a commit each
 
-The audio tests need Playwright's Chromium: `npx playwright install chromium` once on a machine. The only dev
-server is the sheet, under vite.
+The audio tests need Playwright's Chromium: `npx playwright install chromium` once on a machine. The dev servers
+are the sheet and the playground, under vite.
 
 Three baselines exist: `scripts/size-baseline.json`, `test/unchanged.json` (`UNCHANGED_UPDATE=1 npm test`) and
 `scripts/bench-baseline.json`; each is written again only for a change meant to move it, and the commit says why.
@@ -54,6 +55,10 @@ All of it is in `PLAN.md`. All of it is built: `patch.ts`, `synth.ts`, `loudness
 - `sheet/`: a dev-only page (`index.html`, `sheet.ts`) to hear the stock sounds, with a slider per field, a seed box and a copy
   button that gives a TypeScript literal. No logic of its own; nothing in `src/` imports it. Held only by typecheck,
   lint and prettier: a person's ear holds the rest.
+- `playground/`: a dev-only page (`index.html`, `playground.ts`) that wires `Audio` and `Player` as a game does, over a
+  real `AudioContext`, with a control for each thing a game can do (resume, play with pitch, pan and gain, a burst past
+  the capacity, volume and mute, the song played, paused and given a long frame, dispose) and a log of what each call
+  did or threw. For testing by hand what the browser tests only read back. Held like the sheet.
 - Every file of `src/` is exported as `artshape-sound/<name>`, so a file added there is public API.
 
 ## Model features
