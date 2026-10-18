@@ -179,7 +179,13 @@ and is read from it each time.
 
 ## Who uses it
 
-Nobody yet. The first game to pin it is the artshape template, in a feature of its own after v0.1.0. A game pins a
-tag, `"artshape-sound": "github:onion2k/artshape-sound#v0.1.0"`, and imports `artshape-sound/audio`, `/player`,
-`/patches` and `/songs`; the tag is moved on only by a commit that moves the pin and nothing else, and a tag that has been
-pushed is never moved. What each game uses of it goes here when one does.
+A game pins a tag, `"artshape-sound": "github:onion2k/artshape-sound#v0.2.0"`; the tag is moved on only by a commit
+that moves the pin and nothing else, and a tag that has been pushed is never moved. What each game uses of it is here, so
+that a change to any of it is known to reach that game.
+
+- **artshape-game-template** (`~/projects/artshape-game-template`), at v0.2.0 since its commit b8413e5. Only
+  `src/sound.ts` imports it, behind `GameSound`, and the page holds a `LazySound` that makes the context on the first
+  gesture. It uses `Audio` built with `context`, `random`, `volume` and `muted`; `load`, `play` with no options,
+  `resume`, `mute`, `muted`, `volume` read and set, and `voices`; `Player` with the default lookahead, `step` and
+  `beat`; the patches `bank` and `drop`; and the song `calm`. It does not use `play`'s `pitch`, `pan`, `gain` or `at`,
+  `capacity`, `reverb`, `destination`, `dispose`, `Player.stop` or `checkPatch`.
