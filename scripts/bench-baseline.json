@@ -1,0 +1,67 @@
+{
+  "render coin at 48000": {
+    "relative": 0.00843858932551109,
+    "ms": 0.1519,
+    "ref": 18.0048
+  },
+  "render hit at 48000": {
+    "relative": 0.005698000661850076,
+    "ms": 0.1033,
+    "ref": 18.131
+  },
+  "render jump at 48000": {
+    "relative": 0.004883641991344057,
+    "ms": 0.0885,
+    "ref": 18.1123
+  },
+  "render bank at 48000": {
+    "relative": 0.0229833901313471,
+    "ms": 0.4167,
+    "ref": 18.1312
+  },
+  "render drop at 48000": {
+    "relative": 0.013093960730712933,
+    "ms": 0.236,
+    "ref": 18.0217
+  },
+  "render pickup at 48000": {
+    "relative": 0.0037610346872504734,
+    "ms": 0.0676,
+    "ref": 17.9688
+  },
+  "render click at 48000": {
+    "relative": 0.0011452940354803381,
+    "ms": 0.0205,
+    "ref": 17.8975
+  },
+  "render whoosh at 48000": {
+    "relative": 0.01369793476595374,
+    "ms": 0.2471,
+    "ref": 18.0371
+  },
+  "render powerup at 48000": {
+    "relative": 0.02447701898514598,
+    "ms": 0.4324,
+    "ref": 17.6651
+  },
+  "render fail at 48000": {
+    "relative": 0.034286058436866364,
+    "ms": 0.6227,
+    "ref": 18.1606
+  },
+  "render explode at 48000": {
+    "relative": 0.058223843583035124,
+    "ms": 1.0374,
+    "ref": 17.8166
+  },
+  "impulse of the default reverb at 48000": {
+    "relative": 0.010426714596013357,
+    "ms": 0.1878,
+    "ref": 18.0126
+  },
+  "notes of calm over 64 beats": {
+    "relative": 0.0002253141449985133,
+    "ms": 0.0041,
+    "ref": 18.1062
+  }
+}

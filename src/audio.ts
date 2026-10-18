@@ -30,7 +30,7 @@ export const DEFAULT_CAPACITY = 16;
 export const MAX_PITCH = 4;
 /** How far in the past an `at` may be before it is a mistake and not a note that is a frame late, in seconds. */
 export const LATE_TOLERANCE = 0.05;
-const DEFAULT_REVERB = { seconds: 0.6, decay: 4, send: 0.15 };
+export const DEFAULT_REVERB = { seconds: 0.6, decay: 4, send: 0.15 };
 
 interface Voice {
   source: AudioBufferSourceNode;
