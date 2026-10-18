@@ -52,6 +52,72 @@
     "calm": {
       "hash": "de44311d",
       "notes": 128
+    },
+    "lounge": {
+      "hash": "429e6fd5",
+      "notes": 392
+    }
+  },
+  "layered": {
+    "wood": {
+      "hash": "a99f8a4d",
+      "length": 9600
+    },
+    "marimba": {
+      "hash": "f1850a34",
+      "length": 105600
+    },
+    "epiano": {
+      "hash": "57d4bcd2",
+      "length": 81600
+    },
+    "bell": {
+      "hash": "48ea1ede",
+      "length": 168000
+    },
+    "splash": {
+      "hash": "eb905d80",
+      "length": 68160
+    },
+    "applause": {
+      "hash": "343864ec",
+      "length": 146688
+    },
+    "wind": {
+      "hash": "fa56e9b3",
+      "length": 192000
+    },
+    "birds": {
+      "hash": "12b083f3",
+      "length": 27192
+    },
+    "lounge voice 0": {
+      "hash": "57d4bcd2",
+      "length": 81600
+    },
+    "lounge voice 10": {
+      "hash": "82f17522",
+      "length": 91200
+    },
+    "lounge voice 11": {
+      "hash": "81356d2e",
+      "length": 57600
+    },
+    "lounge voice 12": {
+      "hash": "2c0fd73b",
+      "length": 33600
+    },
+    "lounge voice 13": {
+      "hash": "fa5a3c33",
+      "length": 28800
+    },
+    "lounge voice 14": {
+      "hash": "ca408291",
+      "length": 16800
+    },
+    "lounge voice 15": {
+      "hash": "5a0073cc",
+      "length": 5760
     }
   }
 }

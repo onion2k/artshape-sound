@@ -13,6 +13,8 @@ const ENTRIES: { entry: string; budget: number }[] = [
   { entry: 'src/synth.ts', budget: 1981 },
   { entry: 'src/audio.ts', budget: 3775 },
   { entry: 'src/player.ts', budget: 2872 },
+  { entry: 'src/layers.ts', budget: 9750 },
+  { entry: 'src/ambience.ts', budget: 1467 },
 ];
 
 const BASELINE = 'scripts/size-baseline.json';

@@ -10,9 +10,9 @@
 // (`layers[3].q`), as checkPatch refuses a patch's. Nothing in a layered sound is Infinity, so it survives JSON.
 //
 // How it is made. Each layer is drawn into a buffer of its own, scaled by its `gain` and added at its `at`. The sum
-// is soft-clipped with tanh, so that a crowd of layers bends and does not crack, the last sample is set to 0, and the
-// peak is brought to `volume`. The draws of `random` come in a fixed order: the jitter once at the start, then each
-// layer's in the order the layers are listed.
+// is soft-clipped (softClip, a rational stand-in for tanh), so that a crowd of layers bends and does not crack, the
+// last sample is set to 0, and the peak is brought to `volume`. The draws of `random` come in a fixed order: the
+// jitter once at the start, then each layer's in the order the layers are listed.
 
 import { biquad, FILTERS, type FilterKind } from './filter';
 import { normalise } from './loudness';
@@ -151,6 +151,7 @@ const TAU = 2 * Math.PI;
 const DECAYS = 7;
 const DEFAULT_ATTACK = 0.0008;
 const DEFAULT_RELEASE = 0.02;
+const EMPTY = new Float32Array(0);
 
 // ---- the check ----
 
@@ -556,6 +557,8 @@ function toneBuffer(c: Context, o: ToneLayer, path: string): Float32Array {
   const vib = o.vibrato;
   const vibW = vib ? (TAU * vib.rate) / c.rate : 0;
   const vibStep = Math.exp(-1 / (2 * o.decay * c.rate));
+  const sine = kind === 'sine';
+  const step = 1 / c.rate;
   let glide = 1;
   let vibLevel = 1;
   let phase = 0;
@@ -566,8 +569,8 @@ function toneBuffer(c: Context, o: ToneLayer, path: string): Float32Array {
       hz *= 1 + vib.depth * Math.sin(vibW * i) * vibLevel;
       vibLevel *= vibStep;
     }
-    phase += Math.min(hz, nyquist) / c.rate;
-    out[i] = wave(kind, phase) * env[i];
+    phase += Math.min(hz, nyquist) * step;
+    out[i] = (sine ? Math.sin(TAU * phase) : wave(kind, phase)) * env[i];
   }
   return out;
 }
@@ -607,8 +610,9 @@ function fmBuffer(c: Context, o: FmLayer, path: string): Float32Array {
   let barkLevel = bark ? bark.amount : 0;
   for (let i = 0; i < n; i++) {
     let angle = w * i + (floor + index) * Math.sin(w * o.ratio * i);
-    if (bark) {
-      angle += barkLevel * Math.sin(w * bark.ratio * i);
+    // A bark has fallen to nothing audible within a few of its decays, and then costs no sine.
+    if (barkLevel > 1e-5) {
+      angle += barkLevel * Math.sin(w * (bark?.ratio ?? 0) * i);
       barkLevel *= barkStep;
     }
     out[i] = Math.sin(angle) * env[i];
@@ -618,18 +622,19 @@ function fmBuffer(c: Context, o: FmLayer, path: string): Float32Array {
 }
 
 // The level of the gusts: 1 plus each gust's sine. Worked out every BLOCK samples and not every sample, since a gust
-// is slow, and the filter's corner is held for the same blocks.
+// is slow, and the filter's corner is held for the same blocks. `power` is applied to the table and not to the samples:
+// a power is dear, and between two blocks of 32 samples the level is a straight line anyway.
 const BLOCK = 32;
 /** How many samples from the end of a bed are run through its filter first, which is long past where it has settled. */
 const WARM = 16384;
-function gustTable(c: Context, gusts: Gust[], n: number): Float32Array {
+function gustTable(c: Context, gusts: Gust[], n: number, power = 1): Float32Array {
   const phases = gusts.map(() => TAU * c.random());
   const table = new Float32Array(Math.ceil(n / BLOCK) + 2);
   for (let j = 0; j < table.length; j++) {
     let g = 1;
     for (let k = 0; k < gusts.length; k++)
       g += gusts[k].depth * Math.sin(phases[k] + (TAU * gusts[k].cycles * j * BLOCK) / n);
-    table[j] = g;
+    table[j] = power === 1 ? g : Math.max(0, g) ** power;
   }
   return table;
 }
@@ -650,30 +655,40 @@ function noiseBuffer(c: Context, o: NoiseLayer): Float32Array {
     : steady
       ? Math.max(1, Math.ceil((o.length ?? 0) * c.rate))
       : samplesFor(c, attack, o.sustain ?? 0, o.decay ?? 0, o.length);
+  // a bed in a loop is level all along, so it has no envelope to multiply by
   let env: Float32Array;
-  if (bed) env = new Float32Array(n).fill(1);
+  if (bed) env = EMPTY;
   else if (steady) env = envelope(c, n, { attack: 0, decay: 1e9, length: o.length, release: o.release });
   else env = envelope(c, n, { ...o, decay: o.decay ?? 0 });
-  const gusts = o.gusts !== undefined && o.gusts.length > 0 ? gustTable(c, o.gusts, n) : null;
+  // The gusts' phases are drawn once, and the one table gives both the level and the corner.
+  const raw = o.gusts !== undefined && o.gusts.length > 0 ? gustTable(c, o.gusts, n) : null;
   const power = o.gustPower ?? 1;
   const brighten = o.gustBrighten ?? 0;
+  const levels = raw && power !== 0 ? (power === 1 ? raw : raw.map((g) => Math.max(0, g) ** power)) : null;
   const x = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let level = env[i];
-    if (gusts && power !== 0) level *= Math.max(0, gustAt(gusts, i)) ** power;
-    x[i] = (2 * c.random() - 1) * level;
+  const random = c.random;
+  for (let start = 0; start < n; start += BLOCK) {
+    const end = Math.min(n, start + BLOCK);
+    if (levels) {
+      const j = start / BLOCK;
+      const level = Math.max(0, levels[j]);
+      const slope = (Math.max(0, levels[j + 1]) - level) / BLOCK;
+      for (let i = start; i < end; i++) x[i] = (2 * random() - 1) * (bed ? 1 : env[i]) * (level + slope * (i - start));
+    } else for (let i = start; i < end; i++) x[i] = (2 * random() - 1) * (bed ? 1 : env[i]);
   }
-  const ratio = (o.fEnd ?? o.f) / o.f;
+  const swept = brighten !== 0 && raw !== null;
   return biquad(x, c.rate, {
     type: o.filter ?? 'lowpass',
     f: o.f,
+    fEnd: o.fEnd,
     q: o.q,
     // the end of the buffer is run through first, so that the start is where the end leaves the filter
     warm: bed ? Math.min(n, WARM) : 0,
-    corner: (i) => {
-      const swept = o.f * ratio ** (i / n);
-      return gusts && brighten !== 0 ? swept * 2 ** (brighten * (gustAt(gusts, i) - 1)) : swept;
-    },
+    // a corner that is swept and swelled by the gusts is worked out for each block; one that is only swept is the filter's
+    // own sweep, and one that does not move is worked out once
+    corner: swept
+      ? (i) => o.f * ((o.fEnd ?? o.f) / o.f) ** (i / n) * 2 ** (brighten * (gustAt(raw, i) - 1))
+      : undefined,
   });
 }
 
@@ -828,6 +843,18 @@ function layerInto(out: Float32Array, c: Context, layer: Layer, offset: number, 
   }
 }
 
+/**
+ * A soft clip: tanh's curve by a rational that is within 0.025 of it and a quarter of its cost, held at 1 past 3, where
+ * the two meet. A tanh a sample is most of what a long quiet bed costs to render, and a clip that is a few hundredths off
+ * a tanh is not heard: it is there so that a crowd of layers bends and does not crack.
+ */
+export function softClip(x: number): number {
+  if (x >= 3) return 1;
+  if (x <= -3) return -1;
+  const square = x * x;
+  return (x * (27 + square)) / (27 + 9 * square);
+}
+
 // Draws every layer into the mix, then soft-clips it. A problem in a layer is named by its path.
 function drawLayers(who: string, sound: Layered, out: Float32Array, c: Context): void {
   sound.layers.forEach((layer, i) => {
@@ -838,7 +865,7 @@ function drawLayers(who: string, sound: Layered, out: Float32Array, c: Context):
       throw new Error(`${who}: ${message.startsWith('layers[') ? message : `layers[${i}]: ${message}`}`);
     }
   });
-  for (let i = 0; i < out.length; i++) out[i] = Math.tanh(out[i]);
+  for (let i = 0; i < out.length; i++) out[i] = softClip(out[i]);
 }
 
 // The detune of the whole, drawn once, so the whole sound is higher or lower and no layer is out of tune with another.

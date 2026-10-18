@@ -8,6 +8,8 @@ import { peak } from '../src/loudness';
 import { Player } from '../src/player';
 import { audioTime } from '../src/schedule';
 import { notes, type Song, type Voice } from '../src/song';
+import { lounge } from '../src/songs';
+import { ALL_LAYERED, WIND_SECONDS } from '../src/sounds';
 import { seeded } from './helpers';
 
 const SR = 48000;
@@ -173,4 +175,67 @@ describe('notes off the whole beats', () => {
     const upTo = Math.min(a.beat, b.beat);
     expect(cut.calls.filter((_, i) => i < notes(s, 0, upTo).length)).toHaveLength(notes(s, 0, upTo).length);
   });
+});
+
+describe('the song lounge on a Player', () => {
+  const QUANTUM = 128;
+  // thirty-seven render quanta, about a tenth of a second: a step the audio clock lands on exactly
+  const DT = (37 * QUANTUM) / SR;
+
+  it('loads its seven sounds once each, for seventeen voices, and plays every voice', () => {
+    const { audio, calls, loads } = setup();
+    const player = new Player(audio, lounge);
+    expect(loads).toHaveLength(7);
+    // four seconds is five and a half beats: every voice has a note by then
+    for (let i = 0; i < 40; i++) player.step(0.1);
+    expect(player.beat).toBeGreaterThan(5);
+    expect(new Set(calls.map((c) => c.name)).size).toBe(7);
+    expect(calls.length).toBeGreaterThan(30);
+    // the drums at pitch 1, the bass and the piano bent to their notes
+    expect(calls.filter((c) => c.pitch === 1).length).toBeGreaterThan(10);
+    for (const c of calls) {
+      expect(c.pitch).toBeGreaterThanOrEqual(0.25);
+      expect(c.pitch).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('sounds, bounded, with the clock moving: a bar and a half of it, rendered', async () => {
+    const { context, audio } = setup(4);
+    const player = new Player(audio, lounge);
+    const stops: Promise<void>[] = [];
+    for (let t = DT; t < 3.5; t += DT) stops.push(context.suspend(t));
+    player.step(0);
+    const rendering = context.startRendering();
+    for (const stop of stops) {
+      await stop;
+      player.step(DT);
+      await context.resume();
+    }
+    const out = (await rendering).getChannelData(0);
+    const top = peak(out);
+    expect(top).toBeGreaterThan(0.1);
+    expect(top).toBeLessThanOrEqual(1);
+    // and it keeps going: there is sound in the last second as well as the first
+    expect(peak(out.subarray(Math.round(2.5 * SR), Math.round(3.5 * SR)))).toBeGreaterThan(0.05);
+    for (const v of out) expect(Number.isFinite(v)).toBe(true);
+  });
+});
+
+describe('every stock layered sound on an Audio', () => {
+  for (const rate of [44100, 48000]) {
+    it(`loads, with takes, and plays or loops, at ${rate} Hz`, async () => {
+      const context = new OfflineAudioContext(2, rate * 2, rate);
+      const audio = new Audio({ context, random: seeded(1), reverb: NO_REVERB });
+      for (const [name, sound] of Object.entries(ALL_LAYERED))
+        audio.load(name, sound, name === 'wind' ? { loop: WIND_SECONDS } : { variants: 2 });
+      for (const name of Object.keys(ALL_LAYERED)) {
+        if (name === 'wind') audio.loop(name);
+        else audio.play(name, { pitch: name === 'bell' ? 0.5 : 1 });
+      }
+      const out = (await context.startRendering()).getChannelData(0);
+      expect(peak(out)).toBeGreaterThan(0.2);
+      for (const v of out) expect(Number.isFinite(v)).toBe(true);
+      expect(audio.loops).toBe(1);
+    });
+  }
 });

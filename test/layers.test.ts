@@ -3,7 +3,15 @@
 // door, checkLayered, is held to refusing each bad field by its path. Chance enters as a seeded source, so every
 // number here is the same on every run.
 import { describe, expect, it } from 'vitest';
-import { checkLayered, isLayered, layeredSeconds, renderLayered, type Layer, type Layered } from '../src/layers';
+import {
+  checkLayered,
+  isLayered,
+  layeredSeconds,
+  renderLayered,
+  softClip,
+  type Layer,
+  type Layered,
+} from '../src/layers';
 import { MAX_SECONDS } from '../src/patch';
 import { peak } from '../src/loudness';
 import { coin } from '../src/patches';
@@ -908,5 +916,30 @@ describe('the length of a layered sound', () => {
     const click: Layer = { kind: 'tone', at: 0, gain: 1, f: 2000, length: 0.01, decay: 0.002 };
     const s = sound([{ kind: 'bounces', at: 0, gain: 1, layers: [click], count: 3, gap: 0.2, shrink: 1, fade: 1 }]);
     expect(layeredSeconds(s)).toBeCloseTo(0.4 + 0.01, 12);
+  });
+});
+
+describe('softClip', () => {
+  it('is tanh to within a few hundredths, and bounded by 1', () => {
+    for (let x = -8; x <= 8; x += 0.01) {
+      expect(Math.abs(softClip(x) - Math.tanh(x)), `x = ${x}`).toBeLessThan(0.025);
+      expect(Math.abs(softClip(x))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is odd, rises all the way, and has no step where its rational part meets its ceiling', () => {
+    expect(softClip(0)).toBe(0);
+    let last = -1;
+    for (let x = -6; x <= 6; x += 0.001) {
+      const y = softClip(x);
+      expect(y).toBeGreaterThanOrEqual(last);
+      expect(softClip(-x)).toBeCloseTo(-softClip(x), 12);
+      last = y;
+    }
+    expect(Math.abs(softClip(3 + 1e-9) - softClip(3 - 1e-9))).toBeLessThan(1e-6);
+  });
+
+  it('is nearly straight for small values, so a quiet layer keeps its shape', () => {
+    expect(softClip(0.05) / 0.05).toBeGreaterThan(0.999);
   });
 });

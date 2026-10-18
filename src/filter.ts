@@ -28,7 +28,7 @@ export const MIN_CORNER = 20;
 export const MAX_CORNER_SHARE = 0.45;
 
 /** How many samples the coefficients hold for before they are worked out again. */
-const BLOCK = 32;
+const BLOCK = 64;
 
 // The five coefficients [b0, b1, b2, a1, a2], already divided by a0. The constant-peak-gain bandpass, so that a band
 // of a high Q is not quieter than a wide one.
@@ -65,23 +65,31 @@ export function biquad(x: Float32Array, sampleRate: number, o: FilterOptions): F
   const q = o.q ?? 0.7071;
   const f0 = o.f;
   const ratio = (o.fEnd ?? o.f) / o.f;
+  // A corner that does not move has its coefficients worked out once; one that does, every block.
+  const moves = o.corner !== undefined || ratio !== 1;
   const at = o.corner ?? ((i: number) => f0 * ratio ** (i / n));
+  const still = moves ? null : coefficients(o.type, f0, q, sampleRate);
   let x1 = 0;
   let x2 = 0;
   let y1 = 0;
   let y2 = 0;
-  let k = coefficients(o.type, at(0), q, sampleRate);
 
+  // Runs samples [from, to), a block at a time with its coefficients in locals. The first block of a run may begin
+  // part-way through a block, as a warm start does, and takes the corner of its own first sample.
   const run = (from: number, to: number, write: boolean): void => {
-    for (let i = from; i < to; i++) {
-      if (i % BLOCK === 0) k = coefficients(o.type, at(i), q, sampleRate);
-      const v = x[i];
-      const y = k[0] * v + k[1] * x1 + k[2] * x2 - k[3] * y1 - k[4] * y2;
-      x2 = x1;
-      x1 = v;
-      y2 = y1;
-      y1 = y;
-      if (write) x[i] = y;
+    for (let start = from; start < to;) {
+      const end = Math.min(to, (Math.floor(start / BLOCK) + 1) * BLOCK);
+      const [b0, b1, b2, a1, a2] = still ?? coefficients(o.type, at(start), q, sampleRate);
+      for (let i = start; i < end; i++) {
+        const v = x[i];
+        const y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1;
+        x1 = v;
+        y2 = y1;
+        y1 = y;
+        if (write) x[i] = y;
+      }
+      start = end;
     }
   };
   const warm = Math.min(n, Math.max(0, Math.floor(o.warm ?? 0)));
