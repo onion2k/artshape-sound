@@ -9,7 +9,7 @@
 
 import { checkPatch, type Patch } from './patch';
 import { render } from './synth';
-import { impulse } from './reverb';
+import { DEFAULT_REVERB, impulse } from './reverb';
 
 export interface AudioOptions {
   context: BaseAudioContext; // AudioContext in a game, OfflineAudioContext in a test
@@ -30,7 +30,6 @@ export const DEFAULT_CAPACITY = 16;
 export const MAX_PITCH = 4;
 /** How far in the past an `at` may be before it is a mistake and not a note that is a frame late, in seconds. */
 export const LATE_TOLERANCE = 0.05;
-export const DEFAULT_REVERB = { seconds: 0.6, decay: 4, send: 0.15 };
 
 interface Voice {
   source: AudioBufferSourceNode;

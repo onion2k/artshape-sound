@@ -15,3 +15,6 @@ export function impulse(seconds: number, decay: number, sampleRate: number, rand
   for (let i = 0; i < length; i++) out[i] = (2 * random() - 1) * Math.exp((-decay * i) / length);
   return out;
 }
+
+// The room Audio makes when a game asks for none, said here once so that the bench renders the same one.
+export const DEFAULT_REVERB = { seconds: 0.6, decay: 4, send: 0.15 };

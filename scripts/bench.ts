@@ -25,9 +25,8 @@
 // checksum of what it made: a figure from a scene that does different work each time is no figure.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { DEFAULT_REVERB } from '../src/audio';
 import { ALL_PATCHES } from '../src/patches';
-import { impulse } from '../src/reverb';
+import { DEFAULT_REVERB, impulse } from '../src/reverb';
 import { notes } from '../src/song';
 import { calm } from '../src/songs';
 import { render } from '../src/synth';
