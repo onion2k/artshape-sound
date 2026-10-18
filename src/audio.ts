@@ -7,6 +7,7 @@
 //   voice: BufferSource -> gain -> StereoPanner -+-> dry bus ------------------+-> DynamicsCompressor -> master -> out
 //                                                 \-> send gain -> Convolver --/
 
+import { checkLayered, isLayered, renderLayered, type Layered } from './layers';
 import { checkPatch, type Patch } from './patch';
 import { render } from './synth';
 import { DEFAULT_REVERB, impulse } from './reverb';
@@ -28,7 +29,28 @@ export interface PlayOptions {
   at?: number; // audio-clock seconds to start at, default now; a little late is played at once, much later is refused
 }
 
+export interface LoadOptions {
+  variants?: number; // takes to render from the seeded source, default 1; play goes round them
+}
+
+export interface LoopOptions {
+  gain?: number; // 0 or more, default 1
+}
+
+/** What `Audio.loop` gives back: a way to stop the loop and to move its gain. */
+export interface Loop {
+  /** Stops the loop and lets go of its nodes. Stopping twice is harmless. */
+  stop(): void;
+  /** The loop's own level, 0 or more, apart from the master volume; set at any time and heard from then on. */
+  gain: number;
+  /** True while the loop sounds: false once stopped or once the Audio is disposed, and false from the start of a
+   * loop asked of a context that was not running, which is silent and queues nothing, as `play` is. */
+  readonly playing: boolean;
+}
+
 export const DEFAULT_CAPACITY = 16;
+/** The most takes one name may hold. */
+export const MAX_VARIANTS = 32;
 export const MAX_PITCH = 4;
 /** How far in the past an `at` may be before it is a mistake and not a note that is a frame late, in seconds. */
 export const LATE_TOLERANCE = 0.05;
@@ -44,11 +66,32 @@ interface Voice {
   nodes: AudioNode[];
 }
 
+// A sound as loaded: its takes, and which one `play` is to use next.
+interface Sound {
+  takes: AudioBuffer[];
+  next: number;
+}
+
+// A loop that is playing, or has been stopped, or was never started because the context was not running.
+interface LoopState {
+  source: AudioBufferSourceNode | null;
+  level: GainNode | null;
+  gain: number;
+  live: boolean;
+}
+
+function checkGain(gain: number, call: string): number {
+  if (!Number.isFinite(gain) || gain < 0) throw new Error(`Audio.${call}: gain must be 0 or more, got ${gain}`);
+  return gain;
+}
+
 export class Audio {
   private readonly context: BaseAudioContext;
   private readonly capacity: number;
   private readonly random: () => number;
-  private readonly buffers = new Map<string, AudioBuffer>();
+  private readonly sounds = new Map<string, Sound>();
+  // The loops that are sounding; a loop leaves when it is stopped, so the set is as long as the loops are.
+  private readonly looping = new Set<LoopState>();
   // Oldest first, so the one to cut is always at the front.
   private readonly playing: Voice[] = [];
   private readonly bus: GainNode;
@@ -120,30 +163,47 @@ export class Audio {
     return this.playing.length;
   }
 
-  // Renders the patch now, at the context's sample rate, and keeps it under the name; a name loaded twice is replaced.
-  // A bad patch is refused here, by the name of its field, and never reaches play.
-  load(name: string, patch: Patch): void {
+  // How many loops are sounding now, for a test and a leak ceiling. They are not voices: a burst of effects does not cut
+  // a loop, and a loop does not use up the capacity.
+  get loops(): number {
+    return this.looping.size;
+  }
+
+  // Renders the sound now, at the context's sample rate, and keeps it under the name; a name loaded twice is replaced.
+  // A sound is a patch or a layered sound, and `variants` renders that many takes from the seeded source, so that
+  // `play` can go round them and a repeat is not the same sound twice. A bad sound is refused here, by the name of
+  // its field, and never reaches play.
+  load(name: string, sound: Patch | Layered, options: LoadOptions = {}): void {
     this.alive('load');
-    const problem = checkPatch(patch);
+    const variants = options.variants ?? 1;
+    if (!Number.isInteger(variants) || variants < 1 || variants > MAX_VARIANTS)
+      throw new Error(
+        `Audio.load "${name}": variants must be a whole number from 1 to ${MAX_VARIANTS}, got ${variants}`,
+      );
+    const layered = isLayered(sound);
+    const problem = layered ? checkLayered(sound) : checkPatch(sound);
     if (problem !== null) throw new Error(`Audio.load "${name}": ${problem}`);
     const rate = this.context.sampleRate;
-    let samples: Float32Array;
+    const takes: AudioBuffer[] = [];
     try {
-      samples = render(patch, rate, this.random);
+      for (let k = 0; k < variants; k++) {
+        const samples = layered ? renderLayered(sound, rate, this.random) : render(sound, rate, this.random);
+        const buffer = this.context.createBuffer(1, samples.length, rate);
+        buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+        takes.push(buffer);
+      }
     } catch (error) {
       throw new Error(`Audio.load "${name}": ${error instanceof Error ? error.message : String(error)}`);
     }
-    const buffer = this.context.createBuffer(1, samples.length, rate);
-    buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
-    this.buffers.set(name, buffer);
+    this.sounds.set(name, { takes, next: 0 });
   }
 
   // Starts a voice now. Before the context is running (a real one waits for a gesture) it does nothing and queues
   // nothing, so a sound fired at the title screen is not heard late.
   play(name: string, options: PlayOptions = {}): void {
     this.alive('play');
-    const buffer = this.buffers.get(name);
-    if (buffer === undefined) throw new Error(`Audio.play: no sound named "${name}"`);
+    const sound = this.sounds.get(name);
+    if (sound === undefined) throw new Error(`Audio.play: no sound named "${name}"`);
     const { gain = 1, pitch = 1, pan = 0 } = options;
     if (!Number.isFinite(pitch) || pitch <= 0 || pitch > MAX_PITCH)
       throw new Error(`Audio.play: pitch must be above 0 and up to ${MAX_PITCH}, got ${pitch}`);
@@ -163,7 +223,8 @@ export class Audio {
     while (this.playing.length >= this.capacity) this.release(this.playing[0]);
 
     const source = this.context.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = sound.takes[sound.next % sound.takes.length];
+    sound.next = (sound.next + 1) % sound.takes.length;
     source.playbackRate.value = pitch;
     const level = this.context.createGain();
     level.gain.value = gain;
@@ -175,6 +236,45 @@ export class Audio {
     this.playing.push(voice);
     if (at === undefined) source.start();
     else source.start(Math.max(at, 0)); // a time before 0 is a time that has passed, and start refuses it
+  }
+
+  // Plays the first take of a sound over and over until it is stopped, and gives back a handle to stop it or move its
+  // gain. A loop is a bed (wind, a room) and not a voice: it is outside the capacity and is never the oldest to be cut.
+  // On a context that is not running it does nothing and queues nothing, as `play` does, and the handle it gives is a
+  // loop that is not playing, so a caller that asks again once the context runs gets a real one.
+  loop(name: string, options: LoopOptions = {}): Loop {
+    this.alive('loop');
+    const sound = this.sounds.get(name);
+    if (sound === undefined) throw new Error(`Audio.loop: no sound named "${name}"`);
+    const state: LoopState = { source: null, level: null, gain: checkGain(options.gain ?? 1, 'loop'), live: false };
+    if (this.running()) {
+      const source = this.context.createBufferSource();
+      source.buffer = sound.takes[0];
+      source.loop = true;
+      const level = this.context.createGain();
+      level.gain.value = state.gain;
+      source.connect(level).connect(this.bus);
+      source.start();
+      state.source = source;
+      state.level = level;
+      state.live = true;
+      this.looping.add(state);
+    }
+    const now = (): number => this.context.currentTime;
+    return {
+      stop: () => this.endLoop(state),
+      get gain() {
+        return state.gain;
+      },
+      set gain(value: number) {
+        state.gain = checkGain(value, 'loop');
+        // Set as the master's is, with a step at the context's time, so an offline context reads it as it renders.
+        state.level?.gain.setValueAtTime(state.gain, now());
+      },
+      get playing() {
+        return state.live;
+      },
+    };
   }
 
   // Starts a suspended context, on the first gesture. An offline context has nothing to start, so it is a no-op there.
@@ -213,8 +313,9 @@ export class Audio {
     if (this.disposed) return;
     this.disposed = true;
     while (this.playing.length > 0) this.release(this.playing[0]);
+    for (const state of [...this.looping]) this.endLoop(state);
     for (const node of this.graph) node.disconnect();
-    this.buffers.clear();
+    this.sounds.clear();
   }
 
   private alive(call: string): void {
@@ -231,6 +332,22 @@ export class Audio {
 
   private running(): boolean {
     return this.context instanceof OfflineAudioContext || (this.context as AudioContext).state === 'running';
+  }
+
+  // Stops a loop and lets go of its nodes. Safe to call more than once, and after dispose.
+  private endLoop(state: LoopState): void {
+    if (!state.live) return;
+    state.live = false;
+    this.looping.delete(state);
+    try {
+      state.source?.stop();
+    } catch {
+      // A source that has already stopped throws on stop, and there is nothing left to stop.
+    }
+    state.source?.disconnect();
+    state.level?.disconnect();
+    state.source = null;
+    state.level = null;
   }
 
   // Takes a voice out of the count, stops it and lets go of its nodes. Safe to call more than once, as a cut voice
