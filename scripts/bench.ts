@@ -25,10 +25,12 @@
 // checksum of what it made: a figure from a scene that does different work each time is no figure.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import { renderLayered, renderLoop, type Layered } from '../src/layers';
 import { ALL_PATCHES } from '../src/patches';
 import { DEFAULT_REVERB, impulse } from '../src/reverb';
 import { notes } from '../src/song';
-import { calm } from '../src/songs';
+import { calm, lounge } from '../src/songs';
+import { ALL_LAYERED, WIND_SECONDS } from '../src/sounds';
 import { render } from '../src/synth';
 import { judge, overBudget } from './bench-verdict';
 
@@ -99,6 +101,40 @@ const SCENES: Scene[] = [
     slack: 0.05,
     reps: 10,
     work: (random) => sum(impulse(DEFAULT_REVERB.seconds, DEFAULT_REVERB.decay, SAMPLE_RATE, random)),
+  },
+  // Each stock layered sound, a scene of its own. The dearest, the wind as a loop, is WIND_SECONDS of two filtered beds;
+  // the sketch these sounds come from put the dearest strike at 5.6 ms and an applause of separately filtered bursts at
+  // 69, so 10 ms each is the figure to keep, and the crowd and the wind are what hold it.
+  ...Object.entries(ALL_LAYERED).map(([name, sound]): Scene => {
+    const loop = name === 'wind';
+    return {
+      name: loop ? `render ${name} as a ${WIND_SECONDS} s loop at ${SAMPLE_RATE}` : `render ${name} at ${SAMPLE_RATE}`,
+      budget: 10,
+      slack: 0.05,
+      reps: loop ? 2 : 4,
+      work: (random) =>
+        sum(loop ? renderLoop(sound, WIND_SECONDS, SAMPLE_RATE, random) : renderLayered(sound, SAMPLE_RATE, random)),
+    };
+  }),
+  // The sounds the song lounge is played from, each distinct one once: what a Player does when it is made.
+  {
+    name: `render the voices of lounge at ${SAMPLE_RATE}`,
+    budget: 10,
+    slack: 0.05,
+    reps: 2,
+    work: (random) => {
+      let total = 0;
+      for (const patch of new Set(lounge.voices.map((voice) => voice.patch)))
+        total += sum(renderLayered(patch as Layered, SAMPLE_RATE, random));
+      return total;
+    },
+  },
+  {
+    name: 'notes of lounge over 64 beats',
+    budget: 0.5,
+    slack: 0.005,
+    reps: 100,
+    work: () => notes(lounge, 0, 64).reduce((total, n) => total + n.beat + n.frequency + n.voice + n.gain, 0),
   },
   {
     name: 'notes of calm over 64 beats',

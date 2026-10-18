@@ -1,5 +1,7 @@
 {
   "src/synth.ts": 1321,
-  "src/audio.ts": 2786,
-  "src/player.ts": 1916
+  "src/audio.ts": 8369,
+  "src/player.ts": 4306,
+  "src/layers.ts": 6576,
+  "src/ambience.ts": 978
 }

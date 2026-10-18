@@ -125,6 +125,7 @@
         <span>state: <b id="state">none</b></span>
         <span>clock: <b id="clock">0.000</b> s</span>
         <span>voices: <b id="voices">0</b></span>
+        <span>loops: <b id="loops">0</b></span>
         <span>volume: <b id="volume-read">1</b></span>
         <span>muted: <b id="muted-read">false</b></span>
         <span>beat: <b id="beat">0.00</b></span>
@@ -158,6 +159,44 @@
         <button id="unknown" type="button">play "nope"</button>
       </div>
       <div class="pads" id="pads"></div>
+    </section>
+
+    <section>
+      <h2>Layered sounds</h2>
+      <p>Each stock layered sound, loaded with two takes that play round, through the pitch, pan and gain above.</p>
+      <div class="pads" id="layered-pads"></div>
+    </section>
+
+    <section>
+      <h2>A loop</h2>
+      <div class="row">
+        <button id="loop-start" type="button">start the wind</button>
+        <button id="loop-stop" type="button">stop it</button>
+        <label
+          >gain <input id="loop-gain" type="range" min="0" max="1" step="0.01" value="0.6" /><output>0.6</output></label
+        >
+      </div>
+    </section>
+
+    <section>
+      <h2>Ambience: wind and birds</h2>
+      <div class="row">
+        <button id="ambience" type="button">start</button>
+        <label
+          >intensity <input id="intensity" type="range" min="0" max="1" step="0.01" value="0.7" /><output
+            >0.7</output
+          ></label
+        >
+      </div>
+      <p>The bed follows the intensity over a second; the birds call every four to twelve seconds, whatever it is.</p>
+    </section>
+
+    <section>
+      <h2>Music: lounge</h2>
+      <div class="row">
+        <button id="lounge" type="button">play</button>
+        <button id="lounge-restart" type="button">from the start</button>
+      </div>
     </section>
 
     <section>

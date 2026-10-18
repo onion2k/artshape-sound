@@ -11,8 +11,12 @@ import { gzipSync } from 'node:zlib';
 
 const ENTRIES: { entry: string; budget: number }[] = [
   { entry: 'src/synth.ts', budget: 1981 },
-  { entry: 'src/audio.ts', budget: 3775 },
-  { entry: 'src/player.ts', budget: 2872 },
+  // set again at 0.3.0, when Audio came to load a layered sound: 8369 measured then, plus a half
+  { entry: 'src/audio.ts', budget: 12554 },
+  // set again at 0.3.0, when a song's check came to check a layered voice: 4306 measured then, plus a half
+  { entry: 'src/player.ts', budget: 6459 },
+  { entry: 'src/layers.ts', budget: 9750 },
+  { entry: 'src/ambience.ts', budget: 1467 },
 ];
 
 const BASELINE = 'scripts/size-baseline.json';

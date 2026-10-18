@@ -1,14 +1,16 @@
 // The playground: the library wired the way a game wires it (one Audio over a real AudioContext, the stock sounds
-// loaded, the calm song on a Player stepped each frame) with a control for each thing a game can do to it, so that a
+// loaded, the calm and lounge songs on Players and the wind and birds on an Ambience, all stepped each frame) with a control for each thing a game can do to it, so that a
 // person can hear what the browser tests only read back. It is dev only and no part of the library: nothing in src/
 // imports it, and it holds no logic of its own beyond turning a click into a call and a call's result into a line.
 // Without it a real AudioContext driving a player, a crowd through the compressor and volume on a live context would
 // be heard by nobody before a game took the package in. The sheet is for tuning a sound; this is for using them.
 
-import { Audio, DEFAULT_CAPACITY } from '../src/audio';
+import { Ambience } from '../src/ambience';
+import { Audio, DEFAULT_CAPACITY, type Loop } from '../src/audio';
 import { ALL_PATCHES } from '../src/patches';
 import { Player } from '../src/player';
-import { calm } from '../src/songs';
+import { calm, lounge } from '../src/songs';
+import { ALL_LAYERED, WIND_SECONDS } from '../src/sounds';
 
 // The same small LCG as the sheet's, so a build from the same seed sounds the same. src/ has none, since the library
 // takes its chance as an argument.
@@ -68,6 +70,11 @@ let context = new AudioContext();
 let audio: Audio;
 let player: Player;
 let musicOn = false;
+let lounger: Player;
+let loungeOn = false;
+let ambience: Ambience;
+let ambienceOn = false;
+let windLoop: Loop | null = null;
 
 function build(): void {
   const seed = Number(byId<HTMLInputElement>('seed').value);
@@ -81,7 +88,14 @@ function build(): void {
     muted: byId('mute').textContent === 'unmute',
   });
   for (const [name, patch] of Object.entries(ALL_PATCHES)) audio.load(name, patch);
+  // two takes of each layered sound, so that a repeat is heard to differ; the wind as a loop of its own
+  for (const [name, sound] of Object.entries(ALL_LAYERED))
+    audio.load(name, sound, name === 'wind' ? { loop: WIND_SECONDS } : { variants: 2 });
   player = new Player(audio, calm);
+  lounger = new Player(audio, lounge);
+  ambience = new Ambience(audio, { bed: 'wind', calls: ['birds'], random: lcg(seed + 1) });
+  ambience.intensity = Number(byId<HTMLInputElement>('intensity').value);
+  windLoop = null;
   log(
     `built: seed ${seed}, capacity ${capacity}, at ${context.sampleRate} Hz, in ${(performance.now() - started).toFixed(1)} ms`,
   );
@@ -97,10 +111,19 @@ byId('resume').addEventListener('click', () => {
   );
 });
 
+function stopEverything(): void {
+  musicOn = false;
+  loungeOn = false;
+  ambienceOn = false;
+  windLoop = null;
+  byId('music').textContent = 'play';
+  byId('lounge').textContent = 'play';
+  byId('ambience').textContent = 'start';
+}
+
 byId('dispose').addEventListener('click', () => {
   audio.dispose();
-  musicOn = false;
-  byId('music').textContent = 'play';
+  stopEverything();
   log('disposed: every call from here should throw, by name');
 });
 
@@ -109,8 +132,7 @@ byId('rebuild').addEventListener('click', () => {
   audio.dispose();
   void context.close();
   context = new AudioContext();
-  musicOn = false;
-  byId('music').textContent = 'play';
+  stopEverything();
   attempt('build', build);
 });
 
@@ -148,6 +170,13 @@ function play(name: string): void {
   });
 }
 
+for (const name of Object.keys(ALL_LAYERED)) {
+  if (name === 'wind') continue; // a bed, heard under "A loop" and "Ambience"
+  const pad = make('button', { type: 'button', textContent: name });
+  pad.addEventListener('click', () => play(name));
+  byId('layered-pads').append(pad);
+}
+
 const burstSound = byId<HTMLSelectElement>('burst-sound');
 for (const name of Object.keys(ALL_PATCHES)) {
   const pad = make('button', { type: 'button', textContent: name });
@@ -165,6 +194,45 @@ byId('fire-burst').addEventListener('click', () => {
 
 byId('bad-pitch').addEventListener('click', () => attempt('play at pitch 5', () => audio.play('coin', { pitch: 5 })));
 byId('unknown').addEventListener('click', () => attempt('play "nope"', () => audio.play('nope')));
+
+const loopGain = slider('loop-gain', (value) => {
+  if (windLoop) windLoop.gain = value;
+});
+byId('loop-start').addEventListener('click', () => {
+  attempt('loop wind', () => {
+    windLoop = audio.loop('wind', { gain: loopGain() });
+    log(
+      windLoop.playing ? `wind looping: ${audio.loops} loops` : 'wind: the context is not running, so no loop was made',
+    );
+  });
+});
+byId('loop-stop').addEventListener('click', () => {
+  windLoop?.stop();
+  windLoop = null;
+  log('wind stopped (twice is harmless)');
+});
+
+const intensity = slider('intensity', (value) => attempt('intensity', () => (ambience.intensity = value)));
+byId('ambience').addEventListener('click', () => {
+  ambienceOn = !ambienceOn;
+  if (ambienceOn) ambience.start();
+  else ambience.stop();
+  byId('ambience').textContent = ambienceOn ? 'stop' : 'start';
+  log(ambienceOn ? `ambience started at intensity ${intensity()}` : 'ambience stopped');
+});
+
+byId('lounge').addEventListener('click', () => {
+  loungeOn = !loungeOn;
+  if (!loungeOn) lounger.stop();
+  byId('lounge').textContent = loungeOn ? 'pause' : 'play';
+  log(loungeOn ? `lounge on from beat ${lounger.beat.toFixed(2)}` : `lounge paused at beat ${lounger.beat.toFixed(2)}`);
+});
+byId('lounge-restart').addEventListener('click', () => {
+  attempt('lounge from the start', () => {
+    lounger = new Player(audio, lounge);
+    log('lounge back to beat 0');
+  });
+});
 
 byId('music').addEventListener('click', () => {
   musicOn = !musicOn;
@@ -211,9 +279,35 @@ function frame(now: number): void {
         throw error;
       }
     });
+  // The same for the lounge and the ambience: one fault turns it off, and is one line in the log.
+  if (loungeOn)
+    attempt('lounge step', () => {
+      try {
+        lounger.step(dt);
+      } catch (error) {
+        loungeOn = false;
+        byId('lounge').textContent = 'play';
+        throw error;
+      }
+    });
+  if (ambienceOn)
+    attempt('ambience step', () => {
+      try {
+        ambience.step(dt);
+      } catch (error) {
+        ambienceOn = false;
+        byId('ambience').textContent = 'start';
+        throw error;
+      }
+    });
   byId('state').textContent = context.state;
   byId('clock').textContent = context.currentTime.toFixed(3);
-  byId('voices').textContent = String(audio.voices);
+  try {
+    byId('voices').textContent = String(audio.voices);
+    byId('loops').textContent = String(audio.loops);
+  } catch {
+    byId('voices').textContent = byId('loops').textContent = 'disposed';
+  }
   byId('beat').textContent = player.beat.toFixed(2);
   try {
     byId('volume-read').textContent = String(audio.volume);

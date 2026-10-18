@@ -3,8 +3,13 @@
 // logic of its own beyond turning a click into a render and a render into a buffer. Without it the stock sounds could
 // be judged only by reading their numbers.
 
+import { Audio } from '../src/audio';
+import { checkLayered, layeredSeconds, renderLayered, renderLoop, type Layered } from '../src/layers';
 import { checkPatch, DEFAULT_PATCH, WAVES, type Patch, type Wave } from '../src/patch';
 import { ALL_PATCHES } from '../src/patches';
+import { Player } from '../src/player';
+import { lounge } from '../src/songs';
+import { ALL_LAYERED, WIND_SECONDS } from '../src/sounds';
 import { duration, render } from '../src/synth';
 
 // A small LCG, so a play with jitter or noise is the same every time for the same seed in the box. The tests have
@@ -183,3 +188,113 @@ byId('play-all').addEventListener('click', () => {
     at += duration(patch) + 0.5;
   }
 });
+
+// ---- the layered sounds ----
+//
+// Every stock layered sound with a button to hear it, and the song `lounge`. They have no sliders: a layered sound is
+// dozens of numbers, and the way to change one is to copy its source from src/sounds.ts. What is heard here is what the
+// library renders: a sound from `renderLayered` with the seed in the box (so a repeat is another take if the seed is
+// changed), the wind as the loop it is made for, the pitched ones bent by the semitones slider, and the song through a
+// Player stepped by the frame, as a game steps it.
+
+const semitones = byId<HTMLInputElement>('semitones');
+semitones.addEventListener('input', () => {
+  const out = semitones.parentElement?.querySelector('output');
+  if (out) out.value = semitones.value;
+});
+
+// A button that plays the sound once, or for a bed starts and stops its loop, and says how long it took to render.
+function layeredRow(name: string, sound: Layered): void {
+  const status = make('span', { className: 'status' });
+  const isLoop = name === 'wind';
+  let looping: AudioBufferSourceNode | null = null;
+  const button = make('button', { type: 'button', textContent: isLoop ? 'start loop' : 'play' });
+  button.addEventListener('click', () => {
+    context ??= new AudioContext();
+    void context.resume();
+    if (looping) {
+      looping.stop();
+      looping = null;
+      button.textContent = 'start loop';
+      return;
+    }
+    const seed = Number(byId<HTMLInputElement>('seed').value);
+    const started = performance.now();
+    let samples: Float32Array;
+    try {
+      samples = isLoop
+        ? renderLoop(sound, WIND_SECONDS, context.sampleRate, lcg(seed))
+        : renderLayered(sound, context.sampleRate, lcg(seed));
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : String(error);
+      return;
+    }
+    status.textContent = `rendered in ${(performance.now() - started).toFixed(1)} ms`;
+    const buffer = context.createBuffer(1, samples.length, context.sampleRate);
+    buffer.getChannelData(0).set(samples);
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = isLoop;
+    // only a sound with a pitch of its own can be bent to a note
+    if (sound.frequency !== undefined) source.playbackRate.value = 2 ** (Number(semitones.value) / 12);
+    source.connect(context.destination);
+    source.start();
+    if (isLoop) {
+      looping = source;
+      button.textContent = 'stop loop';
+    }
+  });
+  const length = isLoop ? `a ${WIND_SECONDS} s loop` : `${layeredSeconds(sound).toFixed(2)} s`;
+  const pitch = sound.frequency === undefined ? '' : `, at ${sound.frequency} Hz`;
+  byId('layered').append(
+    make(
+      'section',
+      {},
+      make('div', {}, make('h2', { textContent: name }), button, make('span', { textContent: `${length}${pitch}` })),
+      status,
+      make('p', { className: 'error', textContent: checkLayered(sound) ?? '' }),
+    ),
+  );
+}
+for (const [name, sound] of Object.entries(ALL_LAYERED)) layeredRow(name, sound);
+
+// The lounge: an Audio and a Player on the page's context, stepped by the animation frame with the time between frames.
+function loungeRow(): void {
+  const status = make('span', { className: 'status' });
+  const button = make('button', { type: 'button', textContent: 'play' });
+  let player: Player | null = null;
+  let last = 0;
+  const frame = (now: number): void => {
+    if (!player) return;
+    // the frame's own timestamp can be a hair before the click's, so the time is held at 0 from below
+    player.step(Math.max(0, Math.min((now - last) / 1000, 0.25)));
+    last = now;
+    status.textContent = `beat ${player.beat.toFixed(1)}`;
+    requestAnimationFrame(frame);
+  };
+  button.addEventListener('click', () => {
+    context ??= new AudioContext();
+    void context.resume();
+    if (player) {
+      player = null;
+      button.textContent = 'play';
+      return;
+    }
+    const seed = Number(byId<HTMLInputElement>('seed').value);
+    const started = performance.now();
+    player = new Player(new Audio({ context, random: lcg(seed) }), lounge);
+    status.textContent = `voices loaded in ${(performance.now() - started).toFixed(1)} ms`;
+    button.textContent = 'stop';
+    last = performance.now();
+    requestAnimationFrame(frame);
+  });
+  byId('layered').append(
+    make(
+      'section',
+      {},
+      make('div', {}, make('h2', { textContent: 'lounge' }), button, make('span', { textContent: 'a song, 82 bpm' })),
+      status,
+    ),
+  );
+}
+loungeRow();

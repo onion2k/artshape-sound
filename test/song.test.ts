@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PATCH } from '../src/patch';
+import { DEFAULT_PATCH, type Patch } from '../src/patch';
 import { checkSong, notes, type Song, type Voice } from '../src/song';
 import { calm } from '../src/songs';
+import { duration } from '../src/synth';
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const voice = (changes: Partial<Voice> = {}): Voice => ({
@@ -181,7 +182,8 @@ describe('the stock song, calm', () => {
     const classes = new Set(calm.scale.map((step) => (calm.root + step) % 12));
     expect(notes(calm, 0, 64).length).toBeGreaterThan(0);
     for (const n of notes(calm, 0, 64)) expect(classes.has(Math.round(midiOf(n.frequency)) % 12)).toBe(true);
-    for (const v of calm.voices) expect(v.patch.attack + v.patch.sustain + v.patch.release).toBeLessThan(1.5);
+    // calm's voices are patches, whatever a voice may carry now
+    for (const v of calm.voices) expect(duration(v.patch as Patch)).toBeLessThan(1.5);
   });
 });
 

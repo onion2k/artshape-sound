@@ -15,13 +15,19 @@ voices with pan, pitch and gain, a small reverb made from a generated impulse an
 clipping. `Player` steps a song by the game's own time and schedules each note on the audio clock a moment ahead, so
 that a slow frame does not make the music stumble and a paused game stops it where it was.
 
-The cost is code, not download: a few kilobytes gzipped for the effects path and a few more for the player, each held
-to the byte by `npm run size`, which prints the figure. A stock sound renders in about a millisecond at most on a
-desktop, once, at load.
+A sound can also be **layered** (since 0.3.0): a list of layers mixed into one buffer, each a kind of its own (a tone
+with a glide, filtered noise with a sweep, a bank of ringing modes, FM, grains, a crowd's claps, bubbles, a set of
+bounces, or a patch), so that a club meeting a ball, a ball rattling into a cup or a splash sounds like the thing and
+not like a beep. `Ambience` is a looped bed whose level follows an intensity, with calls at a seeded random rate.
+
+The cost is code, not download: about 8 kilobytes gzipped for the effects path with layered sounds, 1.3 for the synth
+alone and 4 for the player, each held to the byte by `npm run size`, which prints the figure. A stock patch renders in
+about a millisecond at most on a desktop, once, at load, and a stock layered sound in under 10 ms (the dearest, a 4 s
+loop of wind, about 7).
 
 ## Using it
 
-    npm install github:onion2k/artshape-sound#v0.2.0
+    npm install github:onion2k/artshape-sound#v0.3.0
 
 It ships TypeScript sources rather than a build, and expects a bundler that compiles them, Vite as the other two do.
 Every file in `src/` is a public path: `artshape-sound/audio`, `artshape-sound/patches`, `artshape-sound/player`.
@@ -81,8 +87,43 @@ wants its own copies one and changes a number.
 | `fail`    | a square sliding down and fading: a mistake, a life lost             |
 | `explode` | a long burst of noise under a slow falling filter: a bomb, a crash   |
 
-And one song, `calm` in `artshape-sound/songs`: C major at 90 beats a minute, going round four chords with a bass, a
-pad and a sparse lead. It is a model to copy: a game that wants its own music changes the numbers.
+Two songs in `artshape-sound/songs`. `calm`: C major at 90 beats a minute, going round four chords with a bass, a pad
+and a sparse lead. `lounge`: an electric piano over a sub bass, a soft kick, a brushed snare and swung hats, at 82, going
+down Fmaj9, Em7, Dm9 and Cmaj9. Each is a model to copy: a game that wants its own music changes the numbers.
+
+## Layered sounds
+
+    import { Audio } from 'artshape-sound/audio';
+    import { Ambience } from 'artshape-sound/ambience';
+    import { splash, wind, birds, WIND_SECONDS } from 'artshape-sound/sounds';
+
+    audio.load('splash', splash, { variants: 3 }); // three takes from the seeded source, played in turn
+    audio.load('wind', wind, { loop: WIND_SECONDS }); // rendered to come round with no seam
+    audio.load('bird', birds, { variants: 4 });
+    audio.play('splash');
+    const place = new Ambience(audio, { random, bed: 'wind', calls: ['bird'] });
+    place.start();
+    place.intensity = 0.6; // the bed fades to it; step(dt) by game time, as the player is
+
+A `Layered` is `{ layers, volume, frequency?, jitter? }`, and every layer has `kind`, `at` (seconds) and `gain`. The
+kinds and their own fields are in `src/layers.ts`, each with its unit and default beside it. `checkLayered` refuses a
+bad one by the path of its field (`layers[2].q`), and `renderLayered(sound, sampleRate, random)` gives its samples,
+the same bits for the same seed. `frequency` is the pitch a pitched sound is rendered at, so a song or a game bends it to
+a note; `jitter` detunes each take a little, so a sound repeated is not the same twice. A layered sound has no
+`Infinity` in it and so survives JSON as it is. `Audio.loop(name, { gain })` plays a sound loaded with `{ loop }` until
+its handle's `stop()`, and is outside the voice pool. A song's voice may carry a layered sound, and a song may have
+`steps` a beat with `swing`, and voices that are `fixed` (a drum, at its own pitch) or `offset` (a strum).
+
+| Name       | What it is                                                               |
+| ---------- | ------------------------------------------------------------------------ |
+| `wood`     | a click and the short ringing of a wooden thing struck: a rail, a post   |
+| `marimba`  | a marimba bar at C5, with the overtones a tuned bar has                  |
+| `epiano`   | an electric piano note at C4: FM with a bark at the strike and a tremolo |
+| `bell`     | an FM bell, for shimmer                                                  |
+| `splash`   | an impact, a plop and bubbles rising: something into water               |
+| `applause` | a polite crowd: claps in three bands, swelling and dying                 |
+| `wind`     | two beds of noise that gust, for a loop of `WIND_SECONDS`                |
+| `birds`    | a chirp train a way off, a different bird each take                      |
 
 ## The sheet
 

@@ -13,6 +13,11 @@
  * degree, a pattern step, the key, the scale or a voice's gain that moved would change a game's music without moving
  * any sound above. The patches a song's voices carry are not held here: their numbers are not in a note.
  *
+ * The layered sounds that came with v0.3.0 are held the same way, under `layered`: each stock layered sound rendered
+ * at 48000 from the same seed (the wind as a loop of WIND_SECONDS), and each distinct sound a voice of the song
+ * `lounge` carries, which a song's notes do not hold. Nothing above them was touched when they were added: the
+ * patches and the song `calm` keep the hashes they had.
+ *
  * A hash that moves is a change in sound, whatever the change meant to do. It is written again only for a change
  * meant to move it, or for a Node upgrade that changes the bits `Math` gives, which is confirmed by checking the old
  * commit out on the new Node first; the commit says which.
@@ -21,9 +26,11 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { renderLayered, renderLoop, type Layered } from '../src/layers';
 import { ALL_PATCHES } from '../src/patches';
 import { notes } from '../src/song';
-import { calm } from '../src/songs';
+import { calm, lounge } from '../src/songs';
+import { ALL_LAYERED, WIND_SECONDS } from '../src/sounds';
 import { render } from '../src/synth';
 import { seeded } from './helpers';
 
@@ -49,11 +56,26 @@ type Hashes = {
   patches: { [name: string]: Look };
   songBeats: number;
   songs: { [name: string]: SongLook };
+  layered: { [name: string]: Look };
 };
 
 /** How many beats of each stock song are held: sixteen bars, which takes the chords round four times. */
 const SONG_BEATS = 64;
-const STOCK_SONGS = { calm };
+const STOCK_SONGS = { calm, lounge };
+
+/** The layered sounds held: the stock ones, and each distinct sound a voice of `lounge` carries, by the first voice. */
+const LOOPS: { [name: string]: number } = { wind: WIND_SECONDS };
+function layeredSounds(): { [name: string]: Layered } {
+  const out: { [name: string]: Layered } = { ...ALL_LAYERED };
+  const seen = new Set<unknown>();
+  lounge.voices.forEach((voice, i) => {
+    if (seen.has(voice.patch)) return;
+    seen.add(voice.patch);
+    out[`lounge voice ${i}`] = voice.patch as Layered;
+  });
+  return out;
+}
+const LAYERED = layeredSounds();
 
 /** FNV-1a over the bytes of the samples, 32 bits of it: enough to tell one sound from another, and cheap. */
 function fnv(bytes: Uint8Array): string {
@@ -70,6 +92,15 @@ function look(name: string): Look {
   return { hash: fnv(new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength)), length: samples.length };
 }
 
+function layeredLook(name: string): Look {
+  const sound = LAYERED[name];
+  const samples =
+    name in LOOPS
+      ? renderLoop(sound, LOOPS[name], SAMPLE_RATE, seeded(SEED))
+      : renderLayered(sound, SAMPLE_RATE, seeded(SEED));
+  return { hash: fnv(new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength)), length: samples.length };
+}
+
 function songLook(name: string): SongLook {
   const got = notes(STOCK_SONGS[name as keyof typeof STOCK_SONGS], 0, SONG_BEATS);
   const text = got.map((n) => `${n.beat} ${n.voice} ${n.frequency.toFixed(6)} ${n.gain}`).join('\n');
@@ -77,7 +108,14 @@ function songLook(name: string): SongLook {
 }
 
 const recorded: Hashes | null = UPDATE ? null : (JSON.parse(readFileSync(RECORD, 'utf8')) as Hashes);
-const written: Hashes = { seed: SEED, sampleRate: SAMPLE_RATE, patches: {}, songBeats: SONG_BEATS, songs: {} };
+const written: Hashes = {
+  seed: SEED,
+  sampleRate: SAMPLE_RATE,
+  patches: {},
+  songBeats: SONG_BEATS,
+  songs: {},
+  layered: {},
+};
 
 describe('the stock patches, unchanged since v0.1.0', () => {
   it('are held to the seed and rate they were written at', () => {
@@ -125,6 +163,24 @@ describe('the stock patches, unchanged since v0.1.0', () => {
 
   it('has a hash for no song that is gone', () => {
     if (recorded) expect(Object.keys(recorded.songs).sort()).toEqual(Object.keys(STOCK_SONGS).sort());
+  });
+
+  for (const name of Object.keys(LAYERED)) {
+    it(`the layered sound ${name}`, () => {
+      const now = layeredLook(name);
+      expect(layeredLook(name), 'the sound is not the same twice from one seed').toEqual(now);
+      if (UPDATE) {
+        written.layered[name] = now;
+        return;
+      }
+      const then = recorded!.layered[name] as Look | undefined;
+      expect(then, `no hash recorded for "${name}"`).toBeDefined();
+      expect(now, `${name} was ${then!.length} samples, is ${now.length}: the sound has changed`).toEqual(then);
+    });
+  }
+
+  it('has a hash for no layered sound that is gone', () => {
+    if (recorded) expect(Object.keys(recorded.layered).sort()).toEqual(Object.keys(LAYERED).sort());
   });
 
   if (UPDATE)

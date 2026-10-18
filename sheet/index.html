@@ -92,6 +92,14 @@
       <button id="play-all" type="button">play all</button>
     </header>
     <main id="rows"></main>
+    <main id="layered">
+      <header>
+        <h1>layered sounds</h1>
+        <label style="grid-template-columns: auto 12rem 4rem">
+          pitch <input id="semitones" type="range" min="-12" max="12" step="1" value="0" /><output>0</output>
+        </label>
+      </header>
+    </main>
     <script type="module" src="./sheet.ts"></script>
   </body>
 </html>

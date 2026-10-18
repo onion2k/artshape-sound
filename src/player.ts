@@ -31,6 +31,8 @@ export class Player {
   // rendered at, which a note's own frequency is measured against.
   private readonly names: string[];
   private readonly base: number[];
+  // Which voices keep their own pitch: a drum is played as it was rendered, whatever its pattern says.
+  private readonly fixed: boolean[];
   private position = 0;
   // The beat up to which notes have been handed out, exclusive: the next step starts there, so no note goes out twice.
   private scheduledUpTo = 0;
@@ -51,11 +53,19 @@ export class Player {
     // with the pitch: the attack and the release shorten as the pitch rises, a filter's cutoff and the vibrato move
     // with it, and the noise changes its colour. That is not noticed within an octave or so and is plain past two,
     // which is also where Audio.play stops (MAX_PITCH), so a voice is to be given a patch near where it plays.
-    this.names = song.voices.map((_, i) => `song${id}:${i}`);
-    this.base = song.voices.map((voice) => voice.patch.frequency);
-    song.voices.forEach((voice, i) => {
-      audio.load(this.names[i], voice.patch);
+    // Voices that carry the very same patch object (a strum of one electric piano, a hat on and off the beat) share one
+    // buffer and one render, under the name of the first of them; a copy that merely equals it is its own voice.
+    const loaded = new Map<object, string>();
+    this.names = song.voices.map((voice, i) => {
+      const shared = loaded.get(voice.patch);
+      if (shared !== undefined) return shared;
+      const name = `song${id}:${i}`;
+      audio.load(name, voice.patch);
+      loaded.set(voice.patch, name);
+      return name;
     });
+    this.base = song.voices.map((voice) => voice.patch.frequency ?? 1);
+    this.fixed = song.voices.map((voice) => voice.fixed === true);
   }
 
   // Where the song is, in beats from its start.
@@ -78,7 +88,9 @@ export class Player {
     for (const note of notes(this.song, from, to)) {
       // Never past what Audio can play. A note further than two octaves from its patch is played at the edge, a wrong
       // note and not a thrown error, in a game that should not stop for the pitch of one voice.
-      const pitch = Math.min(MAX_PITCH, Math.max(1 / MAX_PITCH, note.frequency / this.base[note.voice]));
+      const pitch = this.fixed[note.voice]
+        ? 1
+        : Math.min(MAX_PITCH, Math.max(1 / MAX_PITCH, note.frequency / this.base[note.voice]));
       this.audio.play(this.names[note.voice], {
         gain: note.gain,
         pitch,
