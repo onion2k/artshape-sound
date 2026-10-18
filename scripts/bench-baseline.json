@@ -59,6 +59,56 @@
     "ms": 0.1878,
     "ref": 18.0126
   },
+  "render wood at 48000": {
+    "relative": 0.013413298807774244,
+    "ms": 0.2461,
+    "ref": 18.3447
+  },
+  "render marimba at 48000": {
+    "relative": 0.08055559744702394,
+    "ms": 1.4956,
+    "ref": 18.5665
+  },
+  "render epiano at 48000": {
+    "relative": 0.1319992656958986,
+    "ms": 2.4189,
+    "ref": 18.3248
+  },
+  "render bell at 48000": {
+    "relative": 0.23834536480861598,
+    "ms": 4.3946,
+    "ref": 18.4378
+  },
+  "render splash at 48000": {
+    "relative": 0.16517292488209104,
+    "ms": 3.0324,
+    "ref": 18.359
+  },
+  "render applause at 48000": {
+    "relative": 0.17158130139360775,
+    "ms": 3.1534,
+    "ref": 18.3784
+  },
+  "render wind as a 4 s loop at 48000": {
+    "relative": 0.375422459582155,
+    "ms": 6.8961,
+    "ref": 18.3689
+  },
+  "render birds at 48000": {
+    "relative": 0.020477595926138712,
+    "ms": 0.3793,
+    "ref": 18.5228
+  },
+  "render the voices of lounge at 48000": {
+    "relative": 0.4422242225509249,
+    "ms": 8.11,
+    "ref": 18.3392
+  },
+  "notes of lounge over 64 beats": {
+    "relative": 0.0025414006280388207,
+    "ms": 0.0468,
+    "ref": 18.4126
+  },
   "notes of calm over 64 beats": {
     "relative": 0.0002253141449985133,
     "ms": 0.0041,

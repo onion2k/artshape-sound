@@ -44,11 +44,16 @@ Three baselines exist: `scripts/size-baseline.json`, `test/unchanged.json` (`UNC
 
 All of it is in `PLAN.md`. All of it is built: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts`, `reverb.ts`, `audio.ts`, `song.ts`, `songs.ts`,
 `schedule.ts`, `player.ts`, the sheet in `sheet/`, and in `scripts/` the size gate and the bench (`bench.ts` times,
-`bench-verdict.ts` judges, so that a node test holds the judging).
+`bench-verdict.ts` judges, so that a node test holds the judging). 0.3.0 added `filter.ts`, `layers.ts`, `sounds.ts` and
+`ambience.ts`, and the song's steps, swing, fixed and offset voices.
 
-- `src/patch.ts`, `synth.ts`, `reverb.ts` (with the default room, `DEFAULT_REVERB`), `loudness.ts`, `song.ts`, `schedule.ts`: the thing itself. Pure functions over numbers and
+- `src/patch.ts`, `synth.ts`, `reverb.ts` (with the default room, `DEFAULT_REVERB`), `loudness.ts`, `song.ts`, `schedule.ts`,
+  `filter.ts` (the biquad), `layers.ts` (a `Layered` sound: `checkLayered`, `renderLayered`, `renderLoop`, `softClip`): the thing itself. Pure functions over numbers and
   `Float32Array`s, no Web Audio, no clock, no `Math.random`. Chance comes in as an argument, `random?: () => number`.
-- `src/patches.ts`, `songs.ts`: content, the stock patches and the one stock song, `calm`.
+- `src/patches.ts`, `sounds.ts`, `songs.ts`: content, the stock patches, the stock layered sounds (`ALL_LAYERED`) and the
+  two stock songs, `calm` and `lounge`.
+- `src/ambience.ts`: a bed and calls stepped by game time; it asks only `play` and `loop` of an `Audio`, so a node test
+  hands it a record-keeper.
 - `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext` (`audio.ts` reads the context's clock through `Audio.time`; `player.ts` reads only that, to place a note). They take
   the context as an argument and never read a wall clock. `audio.ts` has the one `Math.random` fallback beside
   `synth.ts`'s, for a game that passes no `random`; the grep test in `test/synth.test.ts` names both.
@@ -65,7 +70,9 @@ All of it is in `PLAN.md`. All of it is built: `patch.ts`, `synth.ts`, `loudness
 
 For code, `src/loudness.ts` with `test/loudness.test.ts` is the smallest model, and `src/synth.ts` with
 `test/synth.test.ts` the fuller (a seeded `random`, checks read back from the samples; `test/helpers.ts` has the
-seeded source and the zero-crossing reader). For a gate, `scripts/size.ts`; for a timed one, `scripts/bench.ts` with its judging in `scripts/bench-verdict.ts` and `test/bench.test.ts`. A stock sound is the
+seeded source and the zero-crossing reader). For a gate, `scripts/size.ts`; for a timed one, `scripts/bench.ts` with its judging in `scripts/bench-verdict.ts` and `test/bench.test.ts`. A layer kind is the model for synthesis: its fields in `src/layers.ts` with `checkLayered`'s paths, its reading-back
+test in `test/layers.test.ts` (`magnitudeAt`, `bandEnergy` and `onsetsOf` in `test/helpers.ts`), and a case in
+`randomLayered` in `test/fuzz.test.ts`. A stock sound is the
 model: `src/patches.ts` (the numbers),
 `test/patches.test.ts` (its checks), `test/unchanged.json` (its samples, hashed), `test/fuzz.test.ts` (its rules at
 random).
@@ -76,7 +83,10 @@ random).
 directly. `Audio` takes an `OfflineAudioContext` in a browser test (`test/audio.audio.test.ts`), which plays, renders with
 `startRendering` and reads the channels back; `AudioOptions.destination` points the master gain at an `AnalyserNode` for
 the one test on a real `AudioContext`. `AudioOptions.volume` and `muted`, and `Audio.volume` and `Audio.muted`, are read
-and set in the same test file (`volume and muted`), the peak of a played tone read back from the render. `Player` is stepped by `step(dt)`; on an offline context the clock moves only as it renders, so a test either reads what was scheduled by spying on `Audio.play` (`at` is the audio-clock time), or suspends the context at each step's time (`context.suspend`, a multiple of 128 frames), steps, and resumes, to render a song with the clock moving (`test/player.audio.test.ts`). The sums are held under node (`test/player.test.ts` over `src/schedule.ts`). There is no end-to-end test; the library has
+and set in the same test file (`volume and muted`), the peak of a played tone read back from the render. `Player` is stepped by `step(dt)`; on an offline context the clock moves only as it renders, so a test either reads what was scheduled by spying on `Audio.play` (`at` is the audio-clock time), or suspends the context at each step's time (`context.suspend`, a multiple of 128 frames), steps, and resumes, to render a song with the clock moving (`test/player.audio.test.ts`). The sums are held under node (`test/player.test.ts` over `src/schedule.ts`). `renderLayered(sound, sampleRate, random)` and
+`renderLoop(sound, seconds, sampleRate, random)` give samples as `render` does; `Audio.load(name, sound, { variants, loop })`,
+`Audio.loop` and `Audio.loops` are read back from an offline render (`test/layered.audio.test.ts`); `Ambience` is held
+under node with a fake output (`test/ambience.test.ts`). There is no end-to-end test; the library has
 no page of its own but the sheet.
 
 ## Edge cases
@@ -96,12 +106,25 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
   or infinite (refused by name, in the options and the setter, and the old volume kept), `muted` in the options (silent,
   reads true), a volume set while muted (kept, heard on unmute), mute or unmute twice (harmless), the getters and setters
   after `dispose` (throw by name); the master step is `setValueAtTime`, so there is no ramp to wait for
+- **a song's steps:** (tested in `test/steps.test.ts`) `steps` 0 or past 16, `swing` past 0.75, `offset` past ±1
+  (refused), a layered voice with no `frequency` that is not fixed (refused), every cut of a range giving each note
+  once, and `calm` with every new field at its default giving the notes it always did
 - **a song:** (tested in `test/song.test.ts`) no voices (no notes), a pattern longer than its chords (it carries into the next
   octave), a rest, a note on the range's edge (`[from, to)`), a beat before 0 (chords and patterns go round both ways), a
   range that is not finite (`notes` throws by name), a chord degree past the scale or a descending scale (`checkSong`
   refuses by field)
 - **the player:** (tested in `test/player.audio.test.ts`) `step(0)` (adds nothing), a huge dt (the beat moves, only a lookahead of notes near it is scheduled, never the skipped music), a paused game (`stop` keeps the beat; the next step goes on from it and plays nothing twice), a note further than two octaves from its voice's patch (played at the edge, `MAX_PITCH`), two players on one `Audio` (buffer names are numbered per player), a bad song or lookahead or dt (refused by name), a disposed `Audio` (`Audio.time` throws, so any step does), a note a frame late (played at once; `at` more than `LATE_TOLERANCE` in the past is refused)
 - **overlapping voices:** Chrome sums a bus's inputs in an order it does not keep, so two renders of voices that overlap differ in the last bit of a float; the tests hold such renders to a part in a million, and byte for byte only where notes do not overlap
+- **a layered sound:** (`randomLayered` in `test/fuzz.test.ts`, 200 by default) no layers or more than `MAX_LAYERS`
+  (refused), a layer whose `at` is past the end or whose total is over 10 s (refused), a `q` of 0 (refused), a corner at
+  or past the Nyquist (clamped, as `cutoff` is), a mode at or past it (skipped) and a tone's or carrier's (refused by
+  path), bounces inside bounces (refused), a claps layer that draws none (one is always drawn), a JSON trip (the same
+  bits), 44100 and 48000
+- **load and loop:** `variants` 0, past `MAX_VARIANTS` or not whole (refused), the takes played round in turn, `loop` on
+  a patch (refused), a loop over 60 s or with gusts whose cycles are not whole (refused), a loop stopped twice (harmless),
+  a loop on a context that is not running (inert), `dispose` with loops playing (they stop)
+- **an ambience:** not started or not stepped (nothing), a paused game (nothing), the same seed (the same calls),
+  intensity outside 0..1 (refused), `stop` (the bed cut at once)
 - **a context:** an `OfflineAudioContext` (`resume` is a no-op); Safari's `webkitAudioContext` is the game's to pass
 - **saved:** nothing is saved (a game keeps its own volume and mute and passes them in); a patch and a song are JSON a game may keep, so a field added defaults to today's sound
 - **scale:** many voices at once, which the capacity caps; what a render costs is the bench's
@@ -115,17 +138,22 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 | render time         | a hard budget each, below     | `scripts/bench-baseline.json` | ±20% and a slack, both ways, below | `scripts/bench.ts`       |
 | gzipped bytes       | measured plus half, per entry | `scripts/size-baseline.json`  | exact                              | `scripts/size.ts`        |
 
-The size gate has three entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; `src/audio.ts`
-and what it imports (the synth, patch, loudness, reverb), 2786 bytes, budget 3775; and `src/player.ts`, 1916 bytes,
-budget 2872. The player imports only a constant from `audio.ts`, so esbuild shakes the `Audio` class out of its bundle and
+The size gate has five entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; `src/audio.ts`
+and what it imports (the synth, patch, loudness, reverb and, since 0.3.0, the layers), 8369 bytes, budget 12554;
+`src/player.ts`, 4306 bytes, budget 6459 (it pulls in `checkLayered` through `checkSong`); `src/layers.ts`, 6576 bytes,
+budget 9750, most of it `checkLayered`'s messages by path; and `src/ambience.ts`, 978 bytes, budget 1467. The audio
+and player budgets were set again at 0.3.0, from the figures then plus a half, as each was when its entry was added. The player imports only a constant from `audio.ts`, so esbuild shakes the `Audio` class out of its bundle and
 the figure is the player's own weight (with `song.ts`, `schedule.ts` and what they pull in), not audio plus player. An
 entry is one line in `ENTRIES` in `scripts/size.ts`. The plan's guess of under
 6 KiB for the effects path and 10 KiB for the whole is still a guess until those are measured. The unchanged gate: `test/unchanged.test.ts` renders each stock patch at 48000 from seed 20261018, hashes the
 samples (FNV-1a) and holds them to `test/unchanged.json` exactly, and hashes the first 64 beats of `calm` as text, a
 line a note (beat, voice, frequency to six decimals, gain), under `songs`; the patches a song's voices carry are not held; it is in `npm test`, so in the quick check.
 
-The bench has thirteen scenes: `render` of each of the eleven stock patches at 48000 (a scene each, so that one patch's
-cost moving is seen as that patch's), `impulse` of the default reverb, and `notes` of `calm` over 64 beats. Each runs
+The bench has twenty-three scenes: `render` of each of the eleven stock patches at 48000 (a scene each, so that one patch's
+cost moving is seen as that patch's), `impulse` of the default reverb, `notes` of `calm` over 64 beats, and since 0.3.0
+`renderLayered` of each of the eight stock layered sounds (wind as its 4 s loop, about 7 ms, the dearest), the voices of
+`lounge` together (about 8 ms) and `notes` of `lounge`. The new scenes' baselines were written on 18 October 2026 with
+the old entries kept as they were. Each runs
 seven times fresh in a worker and the fastest counts, held as a multiple of a reference loop of filter and waveshaper
 arithmetic, so a baseline written on one machine means something on another. It is held to 20% either way and to an
 absolute slack, since a scene of a few hundredths of a millisecond wobbles by more than a fifth between quiet runs (jump
@@ -153,6 +181,9 @@ page (said, not skipped). The pass is `npm run check` green, and the fuzzer over
 
 ## What is not held
 
+- The bench's `bank` scene reads 0.42 or 0.52 ms, and `fail` 0.49 or 0.62, from one run to the next on this machine with
+  nothing changed (seen on 18 October 2026 on main and on the 0.3.0 branch alike), and the far reading fails its
+  tolerance: a fault in the gate or the machine not yet found, which leaves `npm run check` red on it now and then.
 - The bench is one machine's, node's and not a browser's: it times `render`, `impulse` and `notes`, not `Audio.load`
   or a buffer being made on a phone's `AudioContext`. A slack hides a change in the smallest renders (a `click` or a
   `pickup`, under 0.07 ms) that is under about 0.05 ms; a doubling of those is not seen, though a doubling of anything
