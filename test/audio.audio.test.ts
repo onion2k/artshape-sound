@@ -242,6 +242,7 @@ describe('dispose', () => {
     expect(() => audio.play('tone')).toThrow(/disposed/);
     expect(() => audio.load('tone', TONE)).toThrow(/disposed/);
     expect(() => audio.mute(true)).toThrow(/disposed/);
+    expect(() => audio.time).toThrow(/disposed/);
     await expect(audio.resume()).rejects.toThrow(/disposed/);
   });
 
@@ -334,6 +335,23 @@ describe('a real AudioContext', () => {
 
     audio.dispose();
     await context.close();
+  });
+});
+
+describe('time', () => {
+  it('reads the context clock, which an offline context moves only as it renders', async () => {
+    const context = new OfflineAudioContext(2, SR, SR);
+    const audio = new Audio({ context, random: seeded(1), reverb: NO_REVERB });
+    expect(audio.time).toBe(0);
+    const stop = context.suspend(0.25);
+    const rendering = context.startRendering();
+    await stop;
+    // The render stops on a quantum boundary at or after the time asked for.
+    expect(audio.time).toBeGreaterThanOrEqual(0.25);
+    expect(audio.time).toBeLessThan(0.26);
+    expect(audio.time).toBe(context.currentTime);
+    await context.resume();
+    await rendering;
   });
 });
 

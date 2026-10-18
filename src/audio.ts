@@ -94,6 +94,13 @@ export class Audio {
     this.graph = [this.bus, send, convolver, compressor, this.master];
   }
 
+  // The audio clock, in seconds: what a time given to `play` is measured on. It stands still on an offline context
+  // until it renders, and on a real one it stops while the context is suspended.
+  get time(): number {
+    this.alive('time');
+    return this.context.currentTime;
+  }
+
   // How many voices are playing now, for a test and a leak ceiling.
   get voices(): number {
     return this.playing.length;
