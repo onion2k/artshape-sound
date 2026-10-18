@@ -46,5 +46,12 @@
       "hash": "0b94ceb3",
       "length": 50640
     }
+  },
+  "songBeats": 64,
+  "songs": {
+    "calm": {
+      "hash": "de44311d",
+      "notes": 128
+    }
   }
 }

@@ -1,5 +1,5 @@
 /**
- * The stock sounds as v0.1.0 left them, held bit for bit.
+ * The stock sounds and the stock song as v0.1.0 left them, held bit for bit.
  *
  * Every game that pins this package is to sound exactly as it did until it opts in to something new, and a test of
  * what a sound is like only holds it to within a tolerance: a pitch that moved by a part in ten million, or a filter
@@ -7,6 +7,11 @@
  * rendered at 48000 Hz from a fixed seed (SEED, below) and its samples are hashed. The hashes were written by the
  * source at the commit that added this file, before anything else changed. Each field of the synth a later change is to
  * touch was checked by changing a patch by a part in ten million and seeing its hash fail.
+ *
+ * The stock songs are held the same way, by their notes and not their samples: the first SONG_BEATS beats of each are
+ * written out as one line a note (beat, voice, frequency to six decimals, gain) and the text is hashed. A chord
+ * degree, a pattern step, the key, the scale or a voice's gain that moved would change a game's music without moving
+ * any sound above. The patches a song's voices carry are not held here: their numbers are not in a note.
  *
  * A hash that moves is a change in sound, whatever the change meant to do. It is written again only for a change
  * meant to move it, or for a Node upgrade that changes the bits `Math` gives, which is confirmed by checking the old
@@ -17,6 +22,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ALL_PATCHES } from '../src/patches';
+import { notes } from '../src/song';
+import { calm } from '../src/songs';
 import { render } from '../src/synth';
 import { seeded } from './helpers';
 
@@ -31,11 +38,25 @@ interface Look {
   hash: string;
   length: number;
 }
-type Hashes = { seed: number; sampleRate: number; patches: { [name: string]: Look } };
+/** What a song was: the hash of its notes' text, and how many there were. */
+interface SongLook {
+  hash: string;
+  notes: number;
+}
+type Hashes = {
+  seed: number;
+  sampleRate: number;
+  patches: { [name: string]: Look };
+  songBeats: number;
+  songs: { [name: string]: SongLook };
+};
+
+/** How many beats of each stock song are held: sixteen bars, which takes the chords round four times. */
+const SONG_BEATS = 64;
+const STOCK_SONGS = { calm };
 
 /** FNV-1a over the bytes of the samples, 32 bits of it: enough to tell one sound from another, and cheap. */
-function fnv(samples: Float32Array): string {
-  const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
+function fnv(bytes: Uint8Array): string {
   let h = 0x811c9dc5;
   for (let k = 0; k < bytes.length; k++) {
     h ^= bytes[k];
@@ -46,11 +67,17 @@ function fnv(samples: Float32Array): string {
 
 function look(name: string): Look {
   const samples = render(ALL_PATCHES[name as keyof typeof ALL_PATCHES], SAMPLE_RATE, seeded(SEED));
-  return { hash: fnv(samples), length: samples.length };
+  return { hash: fnv(new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength)), length: samples.length };
+}
+
+function songLook(name: string): SongLook {
+  const got = notes(STOCK_SONGS[name as keyof typeof STOCK_SONGS], 0, SONG_BEATS);
+  const text = got.map((n) => `${n.beat} ${n.voice} ${n.frequency.toFixed(6)} ${n.gain}`).join('\n');
+  return { hash: fnv(new TextEncoder().encode(text)), notes: got.length };
 }
 
 const recorded: Hashes | null = UPDATE ? null : (JSON.parse(readFileSync(RECORD, 'utf8')) as Hashes);
-const written: Hashes = { seed: SEED, sampleRate: SAMPLE_RATE, patches: {} };
+const written: Hashes = { seed: SEED, sampleRate: SAMPLE_RATE, patches: {}, songBeats: SONG_BEATS, songs: {} };
 
 describe('the stock patches, unchanged since v0.1.0', () => {
   it('are held to the seed and rate they were written at', () => {
@@ -75,6 +102,29 @@ describe('the stock patches, unchanged since v0.1.0', () => {
 
   it('has a hash for no patch that is gone', () => {
     if (recorded) expect(Object.keys(recorded.patches).sort()).toEqual(Object.keys(ALL_PATCHES).sort());
+  });
+
+  it('are held to the number of beats they were written at', () => {
+    if (recorded) expect(recorded.songBeats).toBe(SONG_BEATS);
+  });
+
+  for (const name of Object.keys(STOCK_SONGS)) {
+    it(`the song ${name}`, () => {
+      const now = songLook(name);
+      expect(songLook(name), 'the notes are not the same twice').toEqual(now);
+      expect(now.notes, 'the song has no notes to hold').toBeGreaterThan(0);
+      if (UPDATE) {
+        written.songs[name] = now;
+        return;
+      }
+      const then = recorded!.songs[name] as SongLook | undefined;
+      expect(then, `no hash recorded for the song "${name}"`).toBeDefined();
+      expect(now, `${name} was ${then!.notes} notes, is ${now.notes}: the music has changed`).toEqual(then);
+    });
+  }
+
+  it('has a hash for no song that is gone', () => {
+    if (recorded) expect(Object.keys(recorded.songs).sort()).toEqual(Object.keys(STOCK_SONGS).sort());
   });
 
   if (UPDATE)
