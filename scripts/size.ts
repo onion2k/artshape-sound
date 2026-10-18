@@ -12,6 +12,7 @@ import { gzipSync } from 'node:zlib';
 const ENTRIES: { entry: string; budget: number }[] = [
   { entry: 'src/synth.ts', budget: 1981 },
   { entry: 'src/audio.ts', budget: 3775 },
+  { entry: 'src/player.ts', budget: 2872 },
 ];
 
 const BASELINE = 'scripts/size-baseline.json';
