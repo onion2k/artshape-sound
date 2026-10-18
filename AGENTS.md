@@ -23,7 +23,7 @@ patch edge cases.
     npm run typecheck      strict tsc, no emit
     npm run lint           eslint, the type-aware rules
     npm run format         prettier, writing: by hand, never by the hook
-    CI                     .github/workflows/check.yml: `check:quick`, then the audio tests, on push to main and every PR
+    CI                     none, by the user's choice: the project is checked locally, with `npm run check`
     mutate                 no mutation tool yet; the hand check stands in
     audit                  `npm audit --audit-level=high`, not yet a script
     updates                a bot for security updates only; versions by hand, monthly, a commit each
@@ -114,11 +114,11 @@ page (said, not skipped). The pass is `npm run check` green, and the fuzzer over
 
 - The stock-sample and render-time gates, until their parts land; the size gate holds only `src/synth.ts` so far.
 - A mutation tool: the hand check alone stands in.
-- The dependency audit, licence and unused-dependency scripts and their workflow, and the secret scan and code scanning
-  in CI: not yet, and for the user to agree an order for.
+- CI of any kind (the user chose local checks only), so the checks run only where someone runs them, and the secret
+  scan and code scanning that would need it. The dependency audit, licence and unused-dependency scripts: not yet, and for the user to agree an order for.
 - The look and end-to-end points, for want of a page.
 - Whether the sounds are good: only the sheet and a person's ear hold that.
-- The audio tests are measured on this machine and in CI only; Safari's and Firefox's Web Audio are not run.
+- The audio tests are measured on this machine only; Safari's and Firefox's Web Audio are not run.
 
 ## How a change lands
 

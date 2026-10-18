@@ -92,7 +92,7 @@ AGENTS.md             the kit's headings, written from what the code does
 CLAUDE.md, GEMINI.md  the kit's one-line pointers
 guardrails/           the kit at v0.7.0, by INSTALL.md
 .githooks/            pre-commit and commit-msg from the kit
-.github/workflows/check.yml   as render's, plus the browser tests
+.github/workflows/check.yml   dropped by the user after part 2: no CI
 README.md, LICENSE, PLAN.md
 ```
 
@@ -271,8 +271,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       burst, `stop` leaves `beat` where it was, and a song played twice
       from the same beat on a fresh context renders the same bytes.
 - [ ] **8. The pass, the bench and the release.** `bench.ts` and its
-      baseline written on a quiet machine. CI workflow, actions pinned by
-      SHA to what was read. The pass of the definition of done, point by
+      baseline written on a quiet machine. No CI workflow (dropped). The pass of the definition of done, point by
       point in the report; mutation-check each new test by hand (the kit's
       hand check line). README filled: what it does, using it (the wiring
       a game does, in ten lines), checking it, licence. AGENTS.md's "Who
