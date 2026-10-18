@@ -1,0 +1,50 @@
+{
+  "seed": 20261018,
+  "sampleRate": 48000,
+  "patches": {
+    "coin": {
+      "hash": "2090f90d",
+      "length": 12000
+    },
+    "hit": {
+      "hash": "27f5be65",
+      "length": 9600
+    },
+    "jump": {
+      "hash": "5ec884bb",
+      "length": 10560
+    },
+    "bank": {
+      "hash": "45d121e2",
+      "length": 32880
+    },
+    "drop": {
+      "hash": "ed6e8bf2",
+      "length": 13440
+    },
+    "pickup": {
+      "hash": "eef77eb3",
+      "length": 7200
+    },
+    "click": {
+      "hash": "99a5c281",
+      "length": 1440
+    },
+    "whoosh": {
+      "hash": "1c678585",
+      "length": 20160
+    },
+    "powerup": {
+      "hash": "03c1c1e2",
+      "length": 24000
+    },
+    "fail": {
+      "hash": "76a728b4",
+      "length": 29040
+    },
+    "explode": {
+      "hash": "0b94ceb3",
+      "length": 50640
+    }
+  }
+}
