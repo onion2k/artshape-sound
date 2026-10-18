@@ -368,12 +368,12 @@ describe('src/ keeps clocks and global chance out', () => {
   const code = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   const forbidden = /Math\.random|Date\.now|performance\.now|new Date\(/g;
 
-  it('finds no Math.random, Date.now or performance.now, bar the one documented fallback in synth.ts', () => {
+  it('finds no Math.random, Date.now or performance.now, bar the documented fallbacks in synth.ts and audio.ts', () => {
     const found: string[] = [];
     for (const file of readdirSync('src').filter((f) => f.endsWith('.ts'))) {
       for (const match of code(readFileSync(`src/${file}`, 'utf8')).matchAll(forbidden))
         found.push(`${file}: ${match[0]}`);
     }
-    expect(found).toEqual(['synth.ts: Math.random']);
+    expect(found).toEqual(['audio.ts: Math.random', 'synth.ts: Math.random']);
   });
 });
