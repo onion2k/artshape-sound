@@ -2,6 +2,7 @@
 // takes that play round, a loop that starts, loops, changes its gain and stops, and the volume and the mute that hold
 // for both. Nothing waits on a clock: the context is rendered, or suspended at a time of its own choosing.
 import { describe, expect, it } from 'vitest';
+import { Ambience } from '../src/ambience';
 import { Audio, type AudioOptions } from '../src/audio';
 import { checkLayered, type Layered } from '../src/layers';
 import { peak, rms } from '../src/loudness';
@@ -10,6 +11,7 @@ import { rmsOfDifference, seeded } from './helpers';
 
 const SR = 48000;
 const NO_REVERB = { seconds: 0.1, decay: 3, send: 0 };
+const TONE_PATCH: Patch = { ...DEFAULT_PATCH, frequency: 200, volume: 0.3 };
 // Noise, so each take is another sound; quiet and short, so the compressor leaves it straight and a take is half a second.
 const NOISY: Layered = {
   volume: 0.2,
@@ -309,5 +311,110 @@ describe('a loop on a real AudioContext', () => {
     expect(() => (handle.gain = 0.3)).not.toThrow();
     audio.dispose();
     await context.close();
+  });
+});
+
+describe('load as a loop', () => {
+  const BED: Layered = {
+    volume: 0.2,
+    layers: [{ kind: 'noise', at: 0, gain: 1, f: 300, steady: true, length: 1, gusts: [{ cycles: 2, depth: 0.5 }] }],
+  };
+
+  it('renders a layered sound as a loop of the length asked, which comes round without a step', async () => {
+    const out = await rendered(
+      (a) => {
+        a.load('bed', BED, { loop: 1 });
+        a.loop('bed');
+      },
+      {},
+      4,
+    );
+    // the seams are at 1, 2 and 3 s, and the bed is low noise: a step across one is no bigger than steps inside
+    let inside = 0;
+    for (let i = Math.round(0.2 * SR) + 1; i < Math.round(0.9 * SR); i++)
+      inside = Math.max(inside, Math.abs(out[i] - out[i - 1]));
+    for (const seam of [1, 2, 3]) {
+      const i = Math.round(seam * SR) + 290; // the compressor's look-ahead delays everything by about 290 samples
+      let across = 0;
+      for (let k = i - 3; k <= i + 3; k++) across = Math.max(across, Math.abs(out[k] - out[k - 1]));
+      expect(across, `seam at ${seam} s`).toBeLessThanOrEqual(1.5 * inside);
+    }
+    expect(rms(slice(out, 1, 3))).toBeGreaterThan(0.02);
+  });
+
+  it('renders each variant as a loop, and plays the first take in a loop', async () => {
+    const out = await rendered((a) => {
+      a.load('bed', BED, { loop: 0.5, variants: 2 });
+      a.loop('bed');
+    });
+    // a loop of 0.5 s: a second and a half later the same samples come again
+    expect(rmsOfDifference(slice(out, 1, 1.4), slice(out, 2.5, 2.9))).toBeLessThan(1e-6);
+  });
+
+  it('refuses a patch as a loop, and a loop length that is not one, by name', () => {
+    const { audio } = make();
+    expect(() => audio.load('p', TONE_PATCH, { loop: 1 })).toThrow(/Audio\.load "p": loop needs a layered sound/);
+    for (const loop of [0, -1, NaN, 61])
+      expect(() => audio.load('bed', BED, { loop }), String(loop)).toThrow(
+        /Audio\.load "bed": renderLoop: seconds must be/,
+      );
+  });
+
+  it('refuses a swell that does not divide the loop, by the path of its field', () => {
+    const { audio } = make();
+    const bad: Layered = {
+      ...BED,
+      layers: [{ ...(BED.layers[0] as object), gusts: [{ cycles: 1.5, depth: 0.3 }] } as Layered['layers'][0]],
+    };
+    expect(() => audio.load('bed', bad, { loop: 2 })).toThrow(/layers\[0\]\.gusts\[0\]\.cycles/);
+  });
+});
+
+describe('an ambience on an Audio', () => {
+  const BED: Layered = {
+    volume: 0.2,
+    layers: [{ kind: 'noise', at: 0, gain: 1, f: 300, steady: true, length: 1 }],
+  };
+  const CALL: Layered = {
+    volume: 0.3,
+    layers: [{ kind: 'tone', at: 0, gain: 1, f: 2000, attack: 0.002, sustain: 0.05, decay: 0.02 }],
+  };
+
+  async function heard(intensity: number): Promise<Float32Array> {
+    const { audio, context } = make();
+    audio.load('bed', BED, { loop: 1 });
+    const ambience = new Ambience(audio, { bed: 'bed', random: seeded(1), fade: 1 });
+    ambience.intensity = intensity;
+    ambience.start();
+    // two seconds of game time, in frames: the bed has reached its level when the render starts
+    for (let i = 0; i < 20; i++) ambience.step(0.1);
+    return (await context.startRendering()).getChannelData(0);
+  }
+
+  it('plays its bed at a level that follows its intensity', async () => {
+    const full = rms(slice(await heard(1), 1, 3));
+    const half = rms(slice(await heard(0.5), 1, 3));
+    const none = rms(slice(await heard(0), 1, 3));
+    expect(full).toBeGreaterThan(0.02);
+    expect(half / full).toBeGreaterThan(0.45);
+    expect(half / full).toBeLessThan(0.55);
+    expect(none).toBe(0);
+  });
+
+  it('plays its calls through the Audio, to its pan and gain', async () => {
+    const { audio, context } = make({}, 12);
+    audio.load('call', CALL);
+    const ambience = new Ambience(audio, { calls: ['call'], interval: [0.5, 0.5], pan: 0, random: seeded(2) });
+    ambience.start();
+    const stop = context.suspend(1);
+    const rendering = context.startRendering();
+    await stop;
+    // game time and the audio clock agree here: a call fires on the step that passes half a second
+    ambience.step(0.5);
+    ambience.step(0.5);
+    await context.resume();
+    const out = (await rendering).getChannelData(0);
+    expect(peak(slice(out, 1, 1.2))).toBeGreaterThan(0.1);
+    expect(peak(slice(out, 0, 0.9))).toBe(0);
   });
 });

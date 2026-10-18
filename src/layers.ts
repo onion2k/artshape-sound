@@ -471,12 +471,23 @@ interface Context {
   random: () => number;
   /** The detune every frequency is multiplied by, drawn once. */
   detune: number;
+  /** The loop's length in samples, or 0 when the sound is not a loop: a loop's tails come round to its start. */
+  loop: number;
 }
 
-// Adds a layer's buffer into the mix from a sample, scaled. Anything past the end of the mix is dropped.
-function mix(out: Float32Array, buffer: Float32Array, start: number, gain: number): void {
-  const n = Math.min(buffer.length, out.length - start);
-  for (let i = 0; i < n; i++) out[start + i] += buffer[i] * gain;
+// Adds a layer's buffer into the mix from a sample, scaled. Anything past the end of the mix is dropped, or in a loop
+// comes round to the start.
+function mix(out: Float32Array, buffer: Float32Array, start: number, gain: number, wrap: boolean): void {
+  if (!wrap) {
+    const n = Math.min(buffer.length, out.length - start);
+    for (let i = 0; i < n; i++) out[start + i] += buffer[i] * gain;
+    return;
+  }
+  let k = start % out.length;
+  for (let i = 0; i < buffer.length; i++) {
+    out[k] += buffer[i] * gain;
+    if (++k === out.length) k = 0;
+  }
 }
 
 // The envelope of a tone-shaped layer over n samples: a rise, a hold, an exponential fall (carried by a running
@@ -574,7 +585,7 @@ function modesInto(out: Float32Array, c: Context, o: ModesLayer, start: number, 
     const w = (TAU * f) / c.rate;
     const buffer = new Float32Array(n);
     for (let i = 0; i < n; i++) buffer[i] = Math.sin(w * i) * env[i];
-    mix(out, buffer, start, gain * amplitude);
+    mix(out, buffer, start, gain * amplitude, c.loop > 0);
   }
 }
 
@@ -609,6 +620,8 @@ function fmBuffer(c: Context, o: FmLayer, path: string): Float32Array {
 // The level of the gusts: 1 plus each gust's sine. Worked out every BLOCK samples and not every sample, since a gust
 // is slow, and the filter's corner is held for the same blocks.
 const BLOCK = 32;
+/** How many samples from the end of a bed are run through its filter first, which is long past where it has settled. */
+const WARM = 16384;
 function gustTable(c: Context, gusts: Gust[], n: number): Float32Array {
   const phases = gusts.map(() => TAU * c.random());
   const table = new Float32Array(Math.ceil(n / BLOCK) + 2);
@@ -629,13 +642,18 @@ const gustAt = (table: Float32Array, i: number): number => {
 // gusts; otherwise it rises and falls like a tone.
 function noiseBuffer(c: Context, o: NoiseLayer): Float32Array {
   const steady = o.steady === true;
+  // In a loop a bed spans the whole of it, so that its swells divide it and its end meets its start.
+  const bed = steady && c.loop > 0;
   const attack = o.attack ?? DEFAULT_ATTACK;
-  const n = steady
-    ? Math.max(1, Math.ceil((o.length ?? 0) * c.rate))
-    : samplesFor(c, attack, o.sustain ?? 0, o.decay ?? 0, o.length);
-  const env = steady
-    ? envelope(c, n, { attack: 0, decay: 1e9, length: o.length, release: o.release })
-    : envelope(c, n, { ...o, decay: o.decay ?? 0 });
+  const n = bed
+    ? c.loop
+    : steady
+      ? Math.max(1, Math.ceil((o.length ?? 0) * c.rate))
+      : samplesFor(c, attack, o.sustain ?? 0, o.decay ?? 0, o.length);
+  let env: Float32Array;
+  if (bed) env = new Float32Array(n).fill(1);
+  else if (steady) env = envelope(c, n, { attack: 0, decay: 1e9, length: o.length, release: o.release });
+  else env = envelope(c, n, { ...o, decay: o.decay ?? 0 });
   const gusts = o.gusts !== undefined && o.gusts.length > 0 ? gustTable(c, o.gusts, n) : null;
   const power = o.gustPower ?? 1;
   const brighten = o.gustBrighten ?? 0;
@@ -650,6 +668,8 @@ function noiseBuffer(c: Context, o: NoiseLayer): Float32Array {
     type: o.filter ?? 'lowpass',
     f: o.f,
     q: o.q,
+    // the end of the buffer is run through first, so that the start is where the end leaves the filter
+    warm: bed ? Math.min(n, WARM) : 0,
     corner: (i) => {
       const swept = o.f * ratio ** (i / n);
       return gusts && brighten !== 0 ? swept * 2 ** (brighten * (gustAt(gusts, i) - 1)) : swept;
@@ -752,7 +772,7 @@ function bubblesInto(out: Float32Array, c: Context, o: BubblesLayer, start: numb
       length: 4 * decay,
       release: decay,
     };
-    mix(out, toneBuffer(c, bubble, path), start + Math.round(t * c.rate), gain * level);
+    mix(out, toneBuffer(c, bubble, path), start + Math.round(t * c.rate), gain * level, c.loop > 0);
   }
 }
 
@@ -763,22 +783,22 @@ function layerInto(out: Float32Array, c: Context, layer: Layer, offset: number, 
   const gain = layer.gain * scale;
   switch (layer.kind) {
     case 'tone':
-      mix(out, toneBuffer(c, layer, path), start, gain);
+      mix(out, toneBuffer(c, layer, path), start, gain, c.loop > 0);
       return;
     case 'noise':
-      mix(out, noiseBuffer(c, layer), start, gain);
+      mix(out, noiseBuffer(c, layer), start, gain, c.loop > 0);
       return;
     case 'modes':
       modesInto(out, c, layer, start, gain);
       return;
     case 'fm':
-      mix(out, fmBuffer(c, layer, path), start, gain);
+      mix(out, fmBuffer(c, layer, path), start, gain, c.loop > 0);
       return;
     case 'grains':
-      mix(out, grainsBuffer(c, layer), start, gain);
+      mix(out, grainsBuffer(c, layer), start, gain, c.loop > 0);
       return;
     case 'claps':
-      mix(out, clapsBuffer(c, layer), start, gain);
+      mix(out, clapsBuffer(c, layer), start, gain, c.loop > 0);
       return;
     case 'bubbles':
       bubblesInto(out, c, layer, start, gain, path);
@@ -790,7 +810,7 @@ function layerInto(out: Float32Array, c: Context, layer: Layer, offset: number, 
       } catch (error) {
         throw new Error(`${path}.patch: ${error instanceof Error ? error.message : String(error)}`);
       }
-      mix(out, samples, start, gain);
+      mix(out, samples, start, gain, c.loop > 0);
       return;
     }
     case 'bounces': {
@@ -808,6 +828,26 @@ function layerInto(out: Float32Array, c: Context, layer: Layer, offset: number, 
   }
 }
 
+// Draws every layer into the mix, then soft-clips it. A problem in a layer is named by its path.
+function drawLayers(who: string, sound: Layered, out: Float32Array, c: Context): void {
+  sound.layers.forEach((layer, i) => {
+    try {
+      layerInto(out, c, layer, 0, 1, `layers[${i}]`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${who}: ${message.startsWith('layers[') ? message : `layers[${i}]: ${message}`}`);
+    }
+  });
+  for (let i = 0; i < out.length; i++) out[i] = Math.tanh(out[i]);
+}
+
+// The detune of the whole, drawn once, so the whole sound is higher or lower and no layer is out of tune with another.
+// A draw of 0.5 is no change.
+function detuneOf(sound: Layered, random: () => number): number {
+  const jitter = sound.jitter ?? 0;
+  return jitter > 0 ? 1 + jitter * (2 * random() - 1) : 1;
+}
+
 // Samples for the layered sound at the sample rate: exactly Math.round(layeredSeconds * sampleRate) of them, the last
 // exactly 0 and the peak `volume`. `random` is called as it is needed and never kept.
 export function renderLayered(sound: Layered, sampleRate: number, random: () => number): Float32Array {
@@ -815,21 +855,49 @@ export function renderLayered(sound: Layered, sampleRate: number, random: () => 
   if (problem !== null) throw new Error(`renderLayered: ${problem}`);
   if (!Number.isFinite(sampleRate) || sampleRate <= 0)
     throw new Error(`renderLayered: sampleRate must be above 0, got ${sampleRate}`);
-  // Drawn once, so the whole sound is higher or lower and no layer is out of tune with another. A draw of 0.5 is no
-  // change.
-  const jitter = sound.jitter ?? 0;
-  const detune = jitter > 0 ? 1 + jitter * (2 * random() - 1) : 1;
-  const c: Context = { rate: sampleRate, random, detune };
+  const c: Context = { rate: sampleRate, random, detune: detuneOf(sound, random), loop: 0 };
   const out = new Float32Array(Math.max(1, Math.round(layeredSeconds(sound) * sampleRate)));
-  sound.layers.forEach((layer, i) => {
-    try {
-      layerInto(out, c, layer, 0, 1, `layers[${i}]`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`renderLayered: ${message.startsWith('layers[') ? message : `layers[${i}]: ${message}`}`);
-    }
-  });
-  for (let i = 0; i < out.length; i++) out[i] = Math.tanh(out[i]);
+  drawLayers('renderLayered', sound, out, c);
   out[out.length - 1] = 0;
+  return normalise(out, sound.volume);
+}
+
+// What a loop needs that a sound does not: a layer that starts inside it, and swells that come round a whole number of
+// times, since a swell that does not would meet itself with a step. Named by path, like the rest.
+function loopProblem(layer: Layer, path: string, seconds: number): string | null {
+  if (layer.at >= seconds) return `${path}.at must be before the end of the loop (${seconds} s), got ${layer.at}`;
+  if (layer.kind === 'noise' && layer.gusts !== undefined) {
+    for (let k = 0; k < layer.gusts.length; k++)
+      if (!Number.isInteger(layer.gusts[k].cycles))
+        return `${path}.gusts[${k}].cycles must be a whole number in a loop, so that the swell divides it, got ${layer.gusts[k].cycles}`;
+  }
+  if (layer.kind === 'bounces') {
+    for (let k = 0; k < layer.layers.length; k++) {
+      const problem = loopProblem(layer.layers[k], `${path}.layers[${k}]`, seconds);
+      if (problem !== null) return problem;
+    }
+  }
+  return null;
+}
+
+// A loop: `seconds` of the sound, exactly Math.round(seconds * sampleRate) samples, that comes round to its start with
+// no step. A tail that runs past the end is wrapped over the start, a steady noise is a bed that spans the whole loop
+// (ignoring its `at` and `length`) and starts in the state its end leaves its filter in, and its swells are checked to
+// divide the loop. It is not ended on 0, being a loop and not a sound; the peak is `volume`.
+export function renderLoop(sound: Layered, seconds: number, sampleRate: number, random: () => number): Float32Array {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_LOOP_SECONDS)
+    throw new Error(`renderLoop: seconds must be from above 0 to ${MAX_LOOP_SECONDS}, got ${seconds}`);
+  const problem = checkLayered(sound);
+  if (problem !== null) throw new Error(`renderLoop: ${problem}`);
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0)
+    throw new Error(`renderLoop: sampleRate must be above 0, got ${sampleRate}`);
+  for (let i = 0; i < sound.layers.length; i++) {
+    const trouble = loopProblem(sound.layers[i], `layers[${i}]`, seconds);
+    if (trouble !== null) throw new Error(`renderLoop: ${trouble}`);
+  }
+  const length = Math.max(1, Math.round(seconds * sampleRate));
+  const c: Context = { rate: sampleRate, random, detune: detuneOf(sound, random), loop: length };
+  const out = new Float32Array(length);
+  drawLayers('renderLoop', sound, out, c);
   return normalise(out, sound.volume);
 }

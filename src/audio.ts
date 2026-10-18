@@ -7,7 +7,7 @@
 //   voice: BufferSource -> gain -> StereoPanner -+-> dry bus ------------------+-> DynamicsCompressor -> master -> out
 //                                                 \-> send gain -> Convolver --/
 
-import { checkLayered, isLayered, renderLayered, type Layered } from './layers';
+import { checkLayered, isLayered, renderLayered, renderLoop, type Layered } from './layers';
 import { checkPatch, type Patch } from './patch';
 import { render } from './synth';
 import { DEFAULT_REVERB, impulse } from './reverb';
@@ -31,6 +31,7 @@ export interface PlayOptions {
 
 export interface LoadOptions {
   variants?: number; // takes to render from the seeded source, default 1; play goes round them
+  loop?: number; // seconds: render a layered sound as a loop of this length, that comes round with no seam
 }
 
 export interface LoopOptions {
@@ -183,11 +184,17 @@ export class Audio {
     const layered = isLayered(sound);
     const problem = layered ? checkLayered(sound) : checkPatch(sound);
     if (problem !== null) throw new Error(`Audio.load "${name}": ${problem}`);
+    const { loop } = options;
+    if (loop !== undefined && !layered)
+      throw new Error(`Audio.load "${name}": loop needs a layered sound, got a patch`);
     const rate = this.context.sampleRate;
     const takes: AudioBuffer[] = [];
     try {
       for (let k = 0; k < variants; k++) {
-        const samples = layered ? renderLayered(sound, rate, this.random) : render(sound, rate, this.random);
+        let samples: Float32Array;
+        if (!isLayered(sound)) samples = render(sound, rate, this.random);
+        else if (loop !== undefined) samples = renderLoop(sound, loop, rate, this.random);
+        else samples = renderLayered(sound, rate, this.random);
         const buffer = this.context.createBuffer(1, samples.length, rate);
         buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
         takes.push(buffer);
