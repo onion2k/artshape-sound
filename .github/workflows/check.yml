@@ -39,3 +39,4 @@ jobs:
       - run: npm run check:quick
       - run: npx playwright install chromium --with-deps
       - run: npm run test:audio
+      - run: npm run size
