@@ -277,7 +277,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       a game does, in ten lines), checking it, licence. AGENTS.md's "Who
       uses it" says nobody yet. Version 0.1.0 committed alone and tagged
       `v0.1.0`, on the user's word.
-      - [ ] The tag `v0.1.0`: on the user's word. package.json already says
+      - [x] The tag `v0.1.0`: on the user's word. package.json already says
         0.1.0, so the release is the tag alone.
 
 ## Out of scope, and next
