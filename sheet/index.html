@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>artshape-sound: the sheet</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        max-width: 56rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 auto 0 0;
+      }
+      section {
+        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+      section > div:first-child {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 0 auto 0 0;
+      }
+      button {
+        font: inherit;
+        padding: 0.4rem 0.8rem;
+        min-height: 2.5rem;
+      }
+      .fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: 0.5rem 1rem;
+        margin-top: 0.75rem;
+      }
+      label {
+        display: grid;
+        grid-template-columns: 7rem 1fr 4.5rem;
+        gap: 0.5rem;
+        align-items: center;
+        font-size: 0.9rem;
+      }
+      label input[type='range'] {
+        min-width: 0;
+      }
+      output {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      label.tick {
+        grid-template-columns: auto 1fr;
+      }
+      .error {
+        color: #c00;
+        margin: 0.5rem 0 0;
+        min-height: 1.2em;
+      }
+      #seed {
+        width: 7rem;
+        font: inherit;
+        padding: 0.35rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>artshape-sound: the sheet</h1>
+      <label style="grid-template-columns: auto auto">
+        seed <input id="seed" type="number" min="0" step="1" value="20261018" />
+      </label>
+      <button id="reseed" type="button">reseed</button>
+      <button id="play-all" type="button">play all</button>
+    </header>
+    <main id="rows"></main>
+    <script type="module" src="./sheet.ts"></script>
+  </body>
+</html>
