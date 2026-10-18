@@ -232,7 +232,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       exists, and marked as written. `check:quick` green on an empty
       `src/`. Check: `tests/run` in the kit's folder is not this project's
       gate; this project's is `npm run check:quick`.
-- [ ] **2. Patch and synth.** `patch.ts`, `synth.ts`, `loudness.ts`.
+- [x] **2. Patch and synth.** `patch.ts`, `synth.ts`, `loudness.ts`.
       Tests: `duration` against the envelope, a sine's frequency read back
       by zero crossings within 1%, `slide` moves it, `punch` raises the
       first peak, `cutoff` lowers energy above it (compare rms of the
