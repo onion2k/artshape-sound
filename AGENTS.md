@@ -210,7 +210,7 @@ and is read from it each time.
 
 ## Who uses it
 
-A game pins a tag, `"artshape-sound": "github:onion2k/artshape-sound#v0.2.0"`; the tag is moved on only by a commit
+A game pins a tag, `"artshape-sound": "github:onion2k/artshape-sound#v0.3.0"`; the tag is moved on only by a commit
 that moves the pin and nothing else, and a tag that has been pushed is never moved. What each game uses of it is here, so
 that a change to any of it is known to reach that game.
 
@@ -220,3 +220,15 @@ that a change to any of it is known to reach that game.
   `resume`, `mute`, `muted`, `volume` read and set, and `voices`; `Player` with the default lookahead, `step` and
   `beat`; the patches `bank` and `drop`; and the song `calm`. It does not use `play`'s `pitch`, `pan`, `gain` or `at`,
   `capacity`, `reverb`, `destination`, `dispose`, `Player.stop` or `checkPatch`.
+- **ooergolf** (`~/projects/ooergolf`), at v0.3.0 since its commit c299784 (v0.2.0 from d0087ea, never imported). Only
+  `src/sound.ts` imports it, lint holding that, behind `GameSound` and a `LazySound` that makes the context on the first
+  gesture. It uses `Audio` built with `context`, `random`, `volume` and `muted`; `load` of `Layered` sounds, with the
+  `loop` option for the wind; `play` with `gain`, `pitch` and `at`; `time`, `resume`, `mute`, `muted`, `volume` read and
+  set, `voices` and `loops`; `Player` with the default lookahead, `step` and `beat`, over the song `lounge`; `Ambience`
+  with `random`, `bed`, `calls` and `callGain`, and its `intensity`, `start`, `stop` and `step`; the stock layered
+  sounds `wood`, `marimba`, `bell`, `splash`, `applause`, `wind` and `birds`, and `WIND_SECONDS`; its own layered sounds
+  (strikes, a putt, sand, landings, a cup, a spring) of the layer kinds `tone`, `noise` (low, high and band pass, with
+  sweeps), `modes`, `grains` and `bounces`; and, in its tests, `checkLayered` and `renderLayered`, its renders held to the
+  10 ms budget. It does not use `variants`, `Audio.loop` directly, `pan`, `capacity`, `reverb`, `destination`,
+  `dispose`, `Player.stop`, the patches, `calm`, the `fm`, `claps`, `bubbles` or `patch` kinds of its own (only through
+  the stock sounds), `renderLoop` or `softClip`.
