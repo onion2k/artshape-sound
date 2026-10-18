@@ -1,6 +1,6 @@
 {
   "name": "artshape-sound",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sound effects and music for a browser game, synthesised from a few numbers at load so that no sound file is downloaded.",
   "license": "MIT",
   "type": "module",
