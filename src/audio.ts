@@ -17,6 +17,8 @@ export interface AudioOptions {
   random?: () => number;
   reverb?: { seconds: number; decay: number; send: number };
   destination?: AudioNode; // where the master gain goes, default the context's destination
+  volume?: number; // 0 to 1, default 1; a game restores its saved setting here
+  muted?: boolean; // default false; a game restores its saved setting here
 }
 
 export interface PlayOptions {
@@ -30,6 +32,12 @@ export const DEFAULT_CAPACITY = 16;
 export const MAX_PITCH = 4;
 /** How far in the past an `at` may be before it is a mistake and not a note that is a frame late, in seconds. */
 export const LATE_TOLERANCE = 0.05;
+
+function checkVolume(volume: number): number {
+  if (!Number.isFinite(volume) || volume < 0 || volume > 1)
+    throw new Error(`Audio: volume must be from 0 to 1, got ${volume}`);
+  return volume;
+}
 
 interface Voice {
   source: AudioBufferSourceNode;
@@ -47,6 +55,9 @@ export class Audio {
   private readonly master: GainNode;
   private readonly graph: AudioNode[];
   private disposed = false;
+  // Volume and mute are kept apart, so that unmuting brings back the volume that was set, even one set while muted.
+  private level: number;
+  private silenced: boolean;
 
   constructor(options: AudioOptions) {
     const { context } = options;
@@ -83,6 +94,10 @@ export class Audio {
     compressor.attack.value = 0.003;
     compressor.release.value = 0.1;
     this.master = context.createGain();
+    this.level = checkVolume(options.volume ?? 1);
+    this.silenced = options.muted ?? false;
+    // Set directly: nothing is playing yet, so there is nothing to click.
+    this.master.gain.value = this.silenced ? 0 : this.level;
 
     this.bus.connect(compressor);
     this.bus.connect(send);
@@ -169,9 +184,28 @@ export class Audio {
     await (this.context as AudioContext).resume();
   }
 
+  // The master volume, 0 to 1, whether or not it is muted. 0 is silence but is not muted.
+  get volume(): number {
+    this.alive('volume');
+    return this.level;
+  }
+
+  set volume(value: number) {
+    this.alive('volume');
+    this.level = checkVolume(value);
+    this.applyMaster();
+  }
+
+  get muted(): boolean {
+    this.alive('muted');
+    return this.silenced;
+  }
+
+  // Silences the master whatever the volume, and unmuting brings the volume back. Either twice is harmless.
   mute(on: boolean): void {
     this.alive('mute');
-    this.master.gain.value = on ? 0 : 1;
+    this.silenced = on;
+    this.applyMaster();
   }
 
   // Stops every voice and takes the graph apart. Every later call throws; a second dispose is harmless.
@@ -185,6 +219,14 @@ export class Audio {
 
   private alive(call: string): void {
     if (this.disposed) throw new Error(`Audio.${call}: this Audio is disposed`);
+  }
+
+  // Sets the master gain with setValueAtTime at the context's time, and not setTargetAtTime. An offline context's clock
+  // stands still until it renders, so a smoothed change would still be sliding when a test reads it and mute would
+  // never be exactly silent; a step lands the same on any context. The cost is a possible click on a live change,
+  // which is a person moving a slider or a button, not a sound already playing at full level.
+  private applyMaster(): void {
+    this.master.gain.setValueAtTime(this.silenced ? 0 : this.level, this.context.currentTime);
   }
 
   private running(): boolean {

@@ -235,6 +235,113 @@ describe('mute', () => {
   });
 });
 
+describe('volume and muted', () => {
+  // The peak of the tone played once, after `setup` has set the master.
+  const heard = async (setup: (a: Audio) => void, options: Partial<AudioOptions> = {}): Promise<number> => {
+    const { left } = await rendered((a) => {
+      tone(a);
+      setup(a);
+      a.play('tone');
+    }, options);
+    return peak(left);
+  };
+
+  it('scales the peak of a played sound with volume', async () => {
+    const full = await heard(() => undefined);
+    const half = await heard((a) => (a.volume = 0.5));
+    const none = await heard((a) => (a.volume = 0));
+    expect(full).toBeGreaterThan(0.01);
+    expect(half / full).toBeGreaterThan(0.49);
+    expect(half / full).toBeLessThan(0.51);
+    expect(none).toBe(0);
+  });
+
+  it('refuses a volume outside 0..1 or not a number, by name, and keeps the old one', async () => {
+    const { audio } = await rendered(tone, { volume: 0.4 });
+    for (const volume of [-0.1, 1.5, NaN, Infinity, -Infinity]) {
+      expect(() => (audio.volume = volume)).toThrow(/volume/);
+    }
+    expect(audio.volume).toBe(0.4);
+    for (const volume of [-1, 2, NaN]) {
+      expect(() => new Audio({ context: new OfflineAudioContext(2, SR, SR), volume })).toThrow(/volume/);
+    }
+  });
+
+  it('takes volume from the options, hears it and reads it back', async () => {
+    const full = await heard(() => undefined);
+    let read = -1;
+    const quarter = await heard((a) => (read = a.volume), { volume: 0.25 });
+    expect(read).toBe(0.25);
+    expect(quarter / full).toBeGreaterThan(0.24);
+    expect(quarter / full).toBeLessThan(0.26);
+  });
+
+  it('defaults to volume 1 and not muted', async () => {
+    const { audio } = await rendered(tone);
+    expect(audio.volume).toBe(1);
+    expect(audio.muted).toBe(false);
+  });
+
+  it('is silent when muted in the options, and reads muted', async () => {
+    let read: boolean | undefined;
+    const level = await heard((a) => (read = a.muted), { muted: true });
+    expect(read).toBe(true);
+    expect(level).toBe(0);
+  });
+
+  it('keeps a volume set while muted, and sounds it on unmute', async () => {
+    const full = await heard(() => undefined);
+    let mutedRead = true;
+    const level = await heard((a) => {
+      a.mute(true);
+      a.volume = 0.5;
+      mutedRead = a.muted;
+      a.mute(false);
+    });
+    expect(mutedRead).toBe(true);
+    expect(level / full).toBeGreaterThan(0.49);
+    expect(level / full).toBeLessThan(0.51);
+    const stillMuted = await heard((a) => {
+      a.mute(true);
+      a.volume = 0.5;
+    });
+    expect(stillMuted).toBe(0);
+  });
+
+  it('does not count volume 0 as muted', async () => {
+    const { audio } = await rendered(tone, { volume: 0 });
+    expect(audio.muted).toBe(false);
+  });
+
+  it('is harmless to mute twice or unmute twice', async () => {
+    const level = await heard((a) => {
+      a.mute(true);
+      a.mute(true);
+      a.mute(false);
+    });
+    expect(level).toBeGreaterThan(0.01);
+    const twice = await heard((a) => {
+      a.mute(true);
+      a.mute(true);
+    });
+    expect(twice).toBe(0);
+    const again = await heard((a) => {
+      a.mute(true);
+      a.mute(false);
+      a.mute(false);
+    });
+    expect(again).toBeGreaterThan(0.01);
+  });
+
+  it('throws by name once disposed, for volume and muted', async () => {
+    const { audio } = await rendered(tone);
+    audio.dispose();
+    expect(() => audio.volume).toThrow(/disposed/);
+    expect(() => (audio.volume = 0.5)).toThrow(/disposed/);
+    expect(() => audio.muted).toThrow(/disposed/);
+  });
+});
+
 describe('dispose', () => {
   it('makes every later call throw, by name', async () => {
     const { audio } = await rendered(tone);
