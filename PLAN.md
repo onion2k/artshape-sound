@@ -261,7 +261,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       `play` throws, `play` before `resume` on a real context is silent.
       One test on a real `AudioContext` with the autoplay flag that `resume`
       resolves and `play` makes sound (read through an AnalyserNode).
-- [ ] **6. Song and sequencer.** `song.ts`, `songs.ts`. Tests: notes in
+- [x] **6. Song and sequencer.** `song.ts`, `songs.ts`. Tests: notes in
       `[from, to)`, every frequency in the key, a chord's degrees respected,
       rests give nothing, a pattern wraps, `checkSong` names each refusal,
       the stock song's first 64 beats join `unchanged.json`.

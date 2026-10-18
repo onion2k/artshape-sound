@@ -11,7 +11,7 @@ the configs and `PLAN.md`, because `src/` was empty. Every line below about a mo
 been built yet is the plan's and not yet the code's. Each part of the plan rewrites the lines it makes true, from what it
 built, and says so in its commit. Part 2 rewrote the lines for `patch`, `synth`, `loudness`, the size gate and the
 patch edge cases; part 3 those for the stock patches, the unchanged gate and the fuzzer; part 5 those for `audio`,
-`reverb`, the browser tests and the second size entry.
+`reverb`, the browser tests and the second size entry; part 6 those for `song`, `songs` and the song in the unchanged gate.
 
 ## Commands
 
@@ -39,12 +39,12 @@ move it, and the commit says why.
 
 ## Layout
 
-All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`), `reverb.ts`, `audio.ts`, and the sheet in `sheet/`; the rest is
+All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`), `reverb.ts`, `audio.ts`, `song.ts`, `songs.ts`, and the sheet in `sheet/`; the rest is
 the plan's.
 
-- `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`: the thing itself (`song.ts` not yet). Pure functions over numbers and
+- `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`: the thing itself. Pure functions over numbers and
   `Float32Array`s, no Web Audio, no clock, no `Math.random`. Chance comes in as an argument, `random?: () => number`.
-- `src/patches.ts`, `songs.ts`: content, the stock patches (built) and the one stock song (not yet).
+- `src/patches.ts`, `songs.ts`: content, the stock patches and the one stock song, `calm`.
 - `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext` (`player.ts` not yet). They take
   the context as an argument and never read a wall clock. `audio.ts` has the one `Math.random` fallback beside
   `synth.ts`'s, for a game that passes no `random`; the grep test in `test/synth.test.ts` names both.
@@ -84,7 +84,10 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 - **play:** before `resume` (silent, not queued; built and tested), at capacity (the oldest is cut; tested), after
   `dispose` (throws; tested), `pitch` 0, negative or above 4 (refused; `MAX_PITCH` is 4, not the plan's 8), `pan` outside
   [-1, 1] and a negative `gain` (refused), an unknown name (throws, by name)
-- **a song:** no voices, a pattern longer than its chords, a rest, a note on the range's edge (`[from, to)`)
+- **a song:** (tested in `test/song.test.ts`) no voices (no notes), a pattern longer than its chords (it carries into the next
+  octave), a rest, a note on the range's edge (`[from, to)`), a beat before 0 (chords and patterns go round both ways), a
+  range that is not finite (`notes` throws by name), a chord degree past the scale or a descending scale (`checkSong`
+  refuses by field)
 - **the player:** `step(0)`, a huge dt, a paused game
 - **a context:** an `OfflineAudioContext` (`resume` is a no-op); Safari's `webkitAudioContext` is the game's to pass
 - **saved:** nothing is saved; a patch and a song are JSON a game may keep, so a field added defaults to today's sound
@@ -93,17 +96,18 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 
 ## Gates
 
-| Figure                | Budget                        | Baseline kept in                       | Tolerance, and why it is that wide | Held by                  |
-| --------------------- | ----------------------------- | -------------------------------------- | ---------------------------------- | ------------------------ |
-| stock sounds' samples | none: bit for bit             | `test/unchanged.json`                  | none                               | `test/unchanged.test.ts` |
-| render time           | a hard budget each (part 8)   | `scripts/bench-baseline.json` (part 8) | ±20%, to be measured               | `scripts/bench.ts`       |
-| gzipped bytes         | measured plus half, per entry | `scripts/size-baseline.json`           | exact                              | `scripts/size.ts`        |
+| Figure              | Budget                        | Baseline kept in                       | Tolerance, and why it is that wide | Held by                  |
+| ------------------- | ----------------------------- | -------------------------------------- | ---------------------------------- | ------------------------ |
+| stock sounds, notes | none: bit for bit             | `test/unchanged.json`                  | none                               | `test/unchanged.test.ts` |
+| render time         | a hard budget each (part 8)   | `scripts/bench-baseline.json` (part 8) | ±20%, to be measured               | `scripts/bench.ts`       |
+| gzipped bytes       | measured plus half, per entry | `scripts/size-baseline.json`           | exact                              | `scripts/size.ts`        |
 
 The size gate has two entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; and `src/audio.ts`
 and what it imports (the synth, patch, loudness, reverb), 2517 bytes, budget 3775. An entry is one line in `ENTRIES` in
 `scripts/size.ts`; part 7 adds `src/player.ts`. The plan's guess of under
 6 KiB for the effects path and 10 KiB for the whole is still a guess until those are measured. The unchanged gate exists: `test/unchanged.test.ts` renders each stock patch at 48000 from seed 20261018, hashes the
-samples (FNV-1a) and holds them to `test/unchanged.json` exactly; it is in `npm test`, so in the quick check. The
+samples (FNV-1a) and holds them to `test/unchanged.json` exactly, and hashes the first 64 beats of `calm` as text, a
+line a note (beat, voice, frequency to six decimals, gain), under `songs`; the patches a song's voices carry are not held; it is in `npm test`, so in the quick check. The
 bench does not exist yet.
 
 - **Audit threshold:** high and critical fail; moderate is reported; an exception is written with why, and looked at
