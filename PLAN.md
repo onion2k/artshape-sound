@@ -224,7 +224,7 @@ Each part is built test first, with its tests seen failing, and ends with
 `check:quick` green and its box ticked. The pass (the definition of done's
 points 3 to 8) is run once, at part 8, before v0.1.0.
 
-- [ ] **1. The repo's shape.** package.json, tsconfig, eslint, prettier,
+- [x] **1. The repo's shape.** package.json, tsconfig, eslint, prettier,
       vitest configs, LICENSE, a README stub, `.gitignore`, this file as
       PLAN.md, and the guardrails kit installed by `INSTALL.md` (merge
       style a merge commit, an agent may do nothing without asking, stale
