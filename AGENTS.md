@@ -106,7 +106,7 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 | gzipped bytes       | measured plus half, per entry | `scripts/size-baseline.json`  | exact                              | `scripts/size.ts`        |
 
 The size gate has three entries: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981; `src/audio.ts`
-and what it imports (the synth, patch, loudness, reverb), 2652 bytes, budget 3775; and `src/player.ts`, 1915 bytes,
+and what it imports (the synth, patch, loudness, reverb), 2786 bytes, budget 3775; and `src/player.ts`, 1916 bytes,
 budget 2872. The player imports only a constant from `audio.ts`, so esbuild shakes the `Audio` class out of its bundle and
 the figure is the player's own weight (with `song.ts`, `schedule.ts` and what they pull in), not audio plus player. An
 entry is one line in `ENTRIES` in `scripts/size.ts`. The plan's guess of under
