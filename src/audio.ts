@@ -23,10 +23,13 @@ export interface PlayOptions {
   gain?: number; // 0 or more, default 1
   pitch?: number; // playback rate, above 0 and up to MAX_PITCH, default 1
   pan?: number; // -1 (left) to 1 (right), default 0
+  at?: number; // audio-clock seconds to start at, default now; a little late is played at once, much later is refused
 }
 
 export const DEFAULT_CAPACITY = 16;
 export const MAX_PITCH = 4;
+/** How far in the past an `at` may be before it is a mistake and not a note that is a frame late, in seconds. */
+export const LATE_TOLERANCE = 0.05;
 const DEFAULT_REVERB = { seconds: 0.6, decay: 4, send: 0.15 };
 
 interface Voice {
@@ -126,6 +129,14 @@ export class Audio {
     if (!Number.isFinite(pan) || pan < -1 || pan > 1)
       throw new Error(`Audio.play: pan must be from -1 to 1, got ${pan}`);
     if (!Number.isFinite(gain) || gain < 0) throw new Error(`Audio.play: gain must be 0 or more, got ${gain}`);
+    const { at } = options;
+    if (at !== undefined) {
+      if (!Number.isFinite(at)) throw new Error(`Audio.play: at must be a finite time in seconds, got ${at}`);
+      // A note a frame late is the player's rounding and plays at once; one far in the past is a caller that has
+      // mixed up the audio clock with its own, and is refused so that the mix-up is seen.
+      if (at < this.context.currentTime - LATE_TOLERANCE)
+        throw new Error(`Audio.play: at ${at} is in the past, the audio clock being at ${this.context.currentTime}`);
+    }
     if (!this.running()) return;
 
     while (this.playing.length >= this.capacity) this.release(this.playing[0]);
@@ -141,7 +152,8 @@ export class Audio {
     const voice: Voice = { source, nodes: [source, level, panner] };
     source.onended = () => this.release(voice);
     this.playing.push(voice);
-    source.start();
+    if (at === undefined) source.start();
+    else source.start(Math.max(at, 0)); // a time before 0 is a time that has passed, and start refuses it
   }
 
   // Starts a suspended context, on the first gesture. An offline context has nothing to start, so it is a no-op there.

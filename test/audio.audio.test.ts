@@ -3,7 +3,7 @@
 // is the only way to see that a context that is not running stays silent and does not queue.
 
 import { describe, expect, it } from 'vitest';
-import { Audio, type AudioOptions } from '../src/audio';
+import { Audio, LATE_TOLERANCE, type AudioOptions } from '../src/audio';
 import { DEFAULT_PATCH, type Patch } from '../src/patch';
 import { duration } from '../src/synth';
 import { hit } from '../src/patches';
@@ -334,5 +334,43 @@ describe('a real AudioContext', () => {
 
     audio.dispose();
     await context.close();
+  });
+});
+
+describe('play at a time', () => {
+  it('starts the sound at the audio-clock time given, and not before', async () => {
+    const { left } = await rendered((a) => {
+      tone(a);
+      a.play('tone', { at: 0.5 });
+    });
+    const { start } = span(left);
+    expect(start).toBeGreaterThan(0.5 - 0.005);
+    expect(start).toBeLessThan(0.5 + 0.02);
+  });
+
+  it('starts at once when no time is given', async () => {
+    const { left } = await rendered((a) => {
+      tone(a);
+      a.play('tone');
+    });
+    expect(span(left).start).toBeLessThan(0.02);
+  });
+
+  it('refuses a time that is not a number or is not finite, by name', async () => {
+    const { audio } = await rendered(tone);
+    for (const at of [NaN, Infinity, -Infinity]) expect(() => audio.play('tone', { at })).toThrow(/at/);
+    expect(audio.voices).toBe(0);
+  });
+
+  it('refuses a time in the past by more than the tolerance, and lets a near miss through', () => {
+    const context = new OfflineAudioContext(2, SR, SR);
+    const audio = new Audio({ context, random: seeded(1), reverb: NO_REVERB });
+    tone(audio);
+    // Offline time stands at 0 until the render, so -1 is a second late.
+    expect(() => audio.play('tone', { at: -1 })).toThrow(/at/);
+    expect(() => audio.play('tone', { at: -LATE_TOLERANCE * 2 })).toThrow(/past/);
+    expect(audio.voices).toBe(0);
+    audio.play('tone', { at: -LATE_TOLERANCE / 2 });
+    expect(audio.voices).toBe(1);
   });
 });
