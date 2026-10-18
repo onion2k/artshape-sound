@@ -253,7 +253,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       the stock sounds are a matter of taste, and only what they choose
       goes on. vite is a dev dependency taken in on purpose, in a commit
       of its own that says what it costs; render already has it.
-- [ ] **5. Audio.** `audio.ts` and `reverb.ts`. Browser tests against an
+- [x] **5. Audio.** `audio.ts` and `reverb.ts`. Browser tests against an
       OfflineAudioContext: a loaded patch played renders non-silence of
       the patch's length plus the reverb's tail, `gain` scales it, `pitch`
       shortens it, `pan` moves it between channels, capacity cuts the
