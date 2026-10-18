@@ -247,9 +247,9 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       an rms within a band so no sound is far louder than another.
       `unchanged.test.ts` and `unchanged.json`, with a comment in the
       shape of physics' saying what wrote them. `fuzz.test.ts`.
-- [ ] **4. The sheet.** `sheet/` under vite, dev only: every stock patch
+- [x] **4. The sheet.** `sheet/` under vite, dev only: every stock patch
       with a button and a slider per field, a seed box, and a copy button
-      that gives the patch as JSON. **Stop here and put it to the user:**
+      that gives the patch as a TypeScript literal (JSON loses Infinity). **Stop here and put it to the user:**
       the stock sounds are a matter of taste, and only what they choose
       goes on. vite is a dev dependency taken in on purpose, in a commit
       of its own that says what it costs; render already has it.

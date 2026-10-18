@@ -20,6 +20,7 @@ patch edge cases; part 3 those for the stock patches, the unchanged gate and the
     SIZE_UPDATE=1 npm run size   writes the size baseline again, for a change meant to move it
     npm test               the node tests, `test/**/*.test.ts`
     npm run test:audio     the audio tests, `test/**/*.audio.test.ts`, in headless Chromium (~? s, not yet measured)
+    npm run sheet          vite on sheet/, http://localhost:5182/: every stock patch with sliders, to be heard in a tab
     npm run typecheck      strict tsc, no emit
     npm run lint           eslint, the type-aware rules
     npm run format         prettier, writing: by hand, never by the hook
@@ -28,8 +29,8 @@ patch edge cases; part 3 those for the stock patches, the unchanged gate and the
     audit                  `npm audit --audit-level=high`, not yet a script
     updates                a bot for security updates only; versions by hand, monthly, a commit each
 
-The audio tests need Playwright's Chromium: `npx playwright install chromium` once on a machine. There is no dev
-server yet; part 4 adds the sheet under vite.
+The audio tests need Playwright's Chromium: `npx playwright install chromium` once on a machine. The only dev
+server is the sheet, under vite.
 
 Two baselines exist: `scripts/size-baseline.json` and `test/unchanged.json` (`UNCHANGED_UPDATE=1 npm test`). The other
 the plan names is `scripts/bench-baseline.json`; each is written again only for a change meant to
@@ -37,7 +38,7 @@ move it, and the commit says why.
 
 ## Layout
 
-All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`); the rest is
+All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`), and the sheet in `sheet/`; the rest is
 the plan's.
 
 - `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`: the thing itself (`reverb.ts` and `song.ts` not yet). Pure functions over numbers and
@@ -45,7 +46,9 @@ the plan's.
 - `src/patches.ts`, `songs.ts`: content, the stock patches (built) and the one stock song (not yet).
 - `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext`. They take the context as an
   argument and never read a wall clock.
-- `sheet/`: a dev-only page to hear the stock sounds. No logic of its own.
+- `sheet/`: a dev-only page (`index.html`, `sheet.ts`) to hear the stock sounds, with a slider per field, a seed box and a copy
+  button that gives a TypeScript literal. No logic of its own; nothing in `src/` imports it. Held only by typecheck,
+  lint and prettier: a person's ear holds the rest.
 - Every file of `src/` is exported as `artshape-sound/<name>`, so a file added there is public API.
 
 ## Model features
