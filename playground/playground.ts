@@ -88,6 +88,7 @@ function build(): void {
 }
 
 attempt('build', build);
+byId('not-running').remove();
 
 byId('resume').addEventListener('click', () => {
   audio.resume().then(
