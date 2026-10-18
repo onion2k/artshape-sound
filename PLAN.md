@@ -240,7 +240,7 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       gives that many onsets, `checkPatch` names each field it refuses,
       and the grep for clocks and `Math.random`. `size.ts` written here
       with its first figure and budgets set from it.
-- [ ] **3. Stock patches and the unchanged gate.** `patches.ts` with
+- [x] **3. Stock patches and the unchanged gate.** `patches.ts` with
       `coin`, `hit`, `jump`, `bank`, `drop`, `pickup`, `click`, `whoosh`,
       `powerup`, `fail`, `explode`. Test: every stock patch passes
       `checkPatch`, lasts under 1.5 s, has a peak of `volume` ± 0.01 and

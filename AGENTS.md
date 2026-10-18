@@ -10,7 +10,7 @@ Read guardrails/GUARDRAILS.md before changing anything: @guardrails/GUARDRAILS.m
 the configs and `PLAN.md`, because `src/` was empty. Every line below about a module, a gate or a baseline that has not
 been built yet is the plan's and not yet the code's. Each part of the plan rewrites the lines it makes true, from what it
 built, and says so in its commit. Part 2 rewrote the lines for `patch`, `synth`, `loudness`, the size gate and the
-patch edge cases.
+patch edge cases; part 3 those for the stock patches, the unchanged gate and the fuzzer.
 
 ## Commands
 
@@ -31,18 +31,18 @@ patch edge cases.
 The audio tests need Playwright's Chromium: `npx playwright install chromium` once on a machine. There is no dev
 server yet; part 4 adds the sheet under vite.
 
-One baseline exists: `scripts/size-baseline.json`. The others the plan names are `test/unchanged.json`
-(`UNCHANGED_UPDATE=1 npm test`) and `scripts/bench-baseline.json`; each is written again only for a change meant to
+Two baselines exist: `scripts/size-baseline.json` and `test/unchanged.json` (`UNCHANGED_UPDATE=1 npm test`). The other
+the plan names is `scripts/bench-baseline.json`; each is written again only for a change meant to
 move it, and the commit says why.
 
 ## Layout
 
-All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts` (with `size.ts` in `scripts/`); the rest is
+All of it is in `PLAN.md`. Built so far: `patch.ts`, `synth.ts`, `loudness.ts`, `patches.ts` (with `size.ts` in `scripts/`); the rest is
 the plan's.
 
 - `src/patch.ts`, `synth.ts`, `reverb.ts`, `loudness.ts`, `song.ts`: the thing itself (`reverb.ts` and `song.ts` not yet). Pure functions over numbers and
   `Float32Array`s, no Web Audio, no clock, no `Math.random`. Chance comes in as an argument, `random?: () => number`.
-- `src/patches.ts`, `songs.ts`: content, the stock patches and the one stock song.
+- `src/patches.ts`, `songs.ts`: content, the stock patches (built) and the one stock song (not yet).
 - `src/audio.ts`, `player.ts`: the picture, the only files that touch an `AudioContext`. They take the context as an
   argument and never read a wall clock.
 - `sheet/`: a dev-only page to hear the stock sounds. No logic of its own.
@@ -52,7 +52,7 @@ the plan's.
 
 For code, `src/loudness.ts` with `test/loudness.test.ts` is the smallest model, and `src/synth.ts` with
 `test/synth.test.ts` the fuller (a seeded `random`, checks read back from the samples; `test/helpers.ts` has the
-seeded source and the zero-crossing reader). For a gate, `scripts/size.ts`. Once part 3 lands, a stock sound is the
+seeded source and the zero-crossing reader). For a gate, `scripts/size.ts`. A stock sound is the
 model: `src/patches.ts` (the numbers),
 `test/patches.test.ts` (its checks), `test/unchanged.json` (its samples, hashed), `test/fuzz.test.ts` (its rules at
 random).
@@ -68,7 +68,8 @@ no page of its own but the sheet.
 
 For anything new, check what it does:
 
-- **a patch:** zero length (all of attack, sustain and release 0: refused), `frequency` 0 or at or past the Nyquist
+- **a patch:** (`test/fuzz.test.ts` draws 200 at random by default, `FUZZ_SEEDS=1-2000` for more, at 44100 and 48000)
+  zero length (all of attack, sustain and release 0: refused), `frequency` 0 or at or past the Nyquist
   (`checkPatch` refuses 0, `render` the Nyquist), `cutoff` 0 (refused) or `Infinity` (no filter), a total over 10 s
   (refused), jitter with and without `random` (a draw of 0.5 is no change), 44100 and 48000 Hz (`Math.round(duration *
 sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: Infinity` to `null`, which
@@ -86,14 +87,15 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 
 | Figure                | Budget                        | Baseline kept in                       | Tolerance, and why it is that wide | Held by                  |
 | --------------------- | ----------------------------- | -------------------------------------- | ---------------------------------- | ------------------------ |
-| stock sounds' samples | none: bit for bit             | `test/unchanged.json` (part 3)         | none                               | `test/unchanged.test.ts` |
+| stock sounds' samples | none: bit for bit             | `test/unchanged.json`                  | none                               | `test/unchanged.test.ts` |
 | render time           | a hard budget each (part 8)   | `scripts/bench-baseline.json` (part 8) | ±20%, to be measured               | `scripts/bench.ts`       |
 | gzipped bytes         | measured plus half, per entry | `scripts/size-baseline.json`           | exact                              | `scripts/size.ts`        |
 
 The size gate exists, with one entry: `src/synth.ts` and what it imports, 1321 bytes gzipped, budget 1981. An entry is
 one line in `ENTRIES` in `scripts/size.ts`; parts 5 and 7 add `src/audio.ts` and `src/player.ts`. The plan's guess of under
-6 KiB for the effects path and 10 KiB for the whole is still a guess until those are measured. The other two gates do
-not exist yet.
+6 KiB for the effects path and 10 KiB for the whole is still a guess until those are measured. The unchanged gate exists: `test/unchanged.test.ts` renders each stock patch at 48000 from seed 20261018, hashes the
+samples (FNV-1a) and holds them to `test/unchanged.json` exactly; it is in `npm test`, so in the quick check. The
+bench does not exist yet.
 
 - **Audit threshold:** high and critical fail; moderate is reported; an exception is written with why, and looked at
   again within 90 days.
@@ -108,11 +110,11 @@ The definition of done's nine points, in this project: unit tests in `test/<modu
 `test/*.audio.test.ts`; a sound that is an input to a rule goes in the fuzzer (`test/fuzz.test.ts`) with its rule; a
 stock patch or song goes into `test/unchanged.json`; a cap for anything kept (the voice pool's capacity, with `voices`
 read back in a test); the size and bench figures before and after; no end-to-end or look point applies, there being no
-page (said, not skipped). The pass is `npm run check` green, and the fuzzer over `FUZZ_SEEDS=1-2000` clean.
+page (said, not skipped). The pass is `npm run check` green, and the fuzzer over `FUZZ_SEEDS=1-2000` clean (about 4.5 s).
 
 ## What is not held
 
-- The stock-sample and render-time gates, until their parts land; the size gate holds only `src/synth.ts` so far.
+- The render-time gate, until part 8 lands; the size gate holds only `src/synth.ts` so far.
 - A mutation tool: the hand check alone stands in.
 - CI of any kind (the user chose local checks only), so the checks run only where someone runs them, and the secret
   scan and code scanning that would need it. The dependency audit, licence and unused-dependency scripts: not yet, and for the user to agree an order for.
