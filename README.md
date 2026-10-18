@@ -54,6 +54,10 @@ Things to know:
 - **A pitch is clamped to what the buffer can bend.** `play` takes a `pitch` above 0 and up to 4, and refuses anything
   else by name. The player bends one rendered buffer to each note, so a voice's patch is to be tuned near where it plays;
   a note more than two octaves from it is played at the edge, not refused.
+- **Volume and mute are two settings.** `new Audio({ context, volume: 0.5, muted: false })` or `audio.volume = 0.5` sets the
+  master volume, 0 to 1 (anything else is refused by name), and `audio.mute(true)` / `audio.muted` silence it without
+  losing the volume, which comes back on unmute. The defaults are full volume and not muted. The library keeps nothing:
+  a game keeps the setting in its own save and passes it back in when it builds the `Audio`.
 - **A mistake is thrown, by name.** An unknown sound, a patch with a field out of range, a `pan` outside -1 to 1, a
   disposed `Audio` and a bad song each throw an `Error` that says which.
 - **A patch kept as JSON loses `cutoff: Infinity`** to `null`, which `checkPatch` refuses. Put it back when you load.

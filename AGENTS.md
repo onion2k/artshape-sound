@@ -70,7 +70,8 @@ random).
 `render(patch, sampleRate, random)` and `impulse(seconds, decay, sampleRate, random)` give samples that a node test reads
 directly. `Audio` takes an `OfflineAudioContext` in a browser test (`test/audio.audio.test.ts`), which plays, renders with
 `startRendering` and reads the channels back; `AudioOptions.destination` points the master gain at an `AnalyserNode` for
-the one test on a real `AudioContext`. `Player` is stepped by `step(dt)`; on an offline context the clock moves only as it renders, so a test either reads what was scheduled by spying on `Audio.play` (`at` is the audio-clock time), or suspends the context at each step's time (`context.suspend`, a multiple of 128 frames), steps, and resumes, to render a song with the clock moving (`test/player.audio.test.ts`). The sums are held under node (`test/player.test.ts` over `src/schedule.ts`). There is no end-to-end test; the library has
+the one test on a real `AudioContext`. `AudioOptions.volume` and `muted`, and `Audio.volume` and `Audio.muted`, are read
+and set in the same test file (`volume and muted`), the peak of a played tone read back from the render. `Player` is stepped by `step(dt)`; on an offline context the clock moves only as it renders, so a test either reads what was scheduled by spying on `Audio.play` (`at` is the audio-clock time), or suspends the context at each step's time (`context.suspend`, a multiple of 128 frames), steps, and resumes, to render a song with the clock moving (`test/player.audio.test.ts`). The sums are held under node (`test/player.test.ts` over `src/schedule.ts`). There is no end-to-end test; the library has
 no page of its own but the sheet.
 
 ## Edge cases
@@ -86,6 +87,10 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 - **play:** before `resume` (silent, not queued; built and tested), at capacity (the oldest is cut; tested), after
   `dispose` (throws; tested), `pitch` 0, negative or above 4 (refused; `MAX_PITCH` is 4, not the plan's 8), `pan` outside
   [-1, 1] and a negative `gain` (refused), an unknown name (throws, by name)
+- **volume and mute:** (tested in `test/audio.audio.test.ts`) `volume` 0 (silent, and not muted), above 1, below 0, `NaN`
+  or infinite (refused by name, in the options and the setter, and the old volume kept), `muted` in the options (silent,
+  reads true), a volume set while muted (kept, heard on unmute), mute or unmute twice (harmless), the getters and setters
+  after `dispose` (throw by name); the master step is `setValueAtTime`, so there is no ramp to wait for
 - **a song:** (tested in `test/song.test.ts`) no voices (no notes), a pattern longer than its chords (it carries into the next
   octave), a rest, a note on the range's edge (`[from, to)`), a beat before 0 (chords and patterns go round both ways), a
   range that is not finite (`notes` throws by name), a chord degree past the scale or a descending scale (`checkSong`
@@ -93,7 +98,7 @@ sampleRate)` samples, the last exactly 0). A patch kept as JSON loses `cutoff: I
 - **the player:** (tested in `test/player.audio.test.ts`) `step(0)` (adds nothing), a huge dt (the beat moves, only a lookahead of notes near it is scheduled, never the skipped music), a paused game (`stop` keeps the beat; the next step goes on from it and plays nothing twice), a note further than two octaves from its voice's patch (played at the edge, `MAX_PITCH`), two players on one `Audio` (buffer names are numbered per player), a bad song or lookahead or dt (refused by name), a disposed `Audio` (`Audio.time` throws, so any step does), a note a frame late (played at once; `at` more than `LATE_TOLERANCE` in the past is refused)
 - **overlapping voices:** Chrome sums a bus's inputs in an order it does not keep, so two renders of voices that overlap differ in the last bit of a float; the tests hold such renders to a part in a million, and byte for byte only where notes do not overlap
 - **a context:** an `OfflineAudioContext` (`resume` is a no-op); Safari's `webkitAudioContext` is the game's to pass
-- **saved:** nothing is saved; a patch and a song are JSON a game may keep, so a field added defaults to today's sound
+- **saved:** nothing is saved (a game keeps its own volume and mute and passes them in); a patch and a song are JSON a game may keep, so a field added defaults to today's sound
 - **scale:** many voices at once, which the capacity caps; what a render costs is the bench's
 - **phone:** a slower machine renders slower at load; the bench holds how much, and the sample rate is the context's
 
