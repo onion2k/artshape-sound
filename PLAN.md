@@ -270,13 +270,15 @@ points 3 to 8) is run once, at part 8, before v0.1.0.
       and no further, `step(0)` schedules nothing new, a huge dt does not
       burst, `stop` leaves `beat` where it was, and a song played twice
       from the same beat on a fresh context renders the same bytes.
-- [ ] **8. The pass, the bench and the release.** `bench.ts` and its
+- [x] **8. The pass, the bench and the release.** `bench.ts` and its
       baseline written on a quiet machine. No CI workflow (dropped). The pass of the definition of done, point by
       point in the report; mutation-check each new test by hand (the kit's
       hand check line). README filled: what it does, using it (the wiring
       a game does, in ten lines), checking it, licence. AGENTS.md's "Who
       uses it" says nobody yet. Version 0.1.0 committed alone and tagged
       `v0.1.0`, on the user's word.
+      - [ ] The tag `v0.1.0`: on the user's word. package.json already says
+        0.1.0, so the release is the tag alone.
 
 ## Out of scope, and next
 
