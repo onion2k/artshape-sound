@@ -15,8 +15,9 @@ voices with pan, pitch and gain, a small reverb made from a generated impulse an
 clipping. `Player` steps a song by the game's own time and schedules each note on the audio clock a moment ahead, so
 that a slow frame does not make the music stumble and a paused game stops it where it was.
 
-The cost is code, not download: the effects path is about 2.6 KiB gzipped and the player about 1.9 KiB, held by a size
-gate. A stock sound renders in about a millisecond at most on a desktop, once, at load.
+The cost is code, not download: a few kilobytes gzipped for the effects path and a few more for the player, each held
+to the byte by `npm run size`, which prints the figure. A stock sound renders in about a millisecond at most on a
+desktop, once, at load.
 
 ## Using it
 
