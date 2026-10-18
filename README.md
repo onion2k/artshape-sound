@@ -21,7 +21,7 @@ desktop, once, at load.
 
 ## Using it
 
-    npm install github:onion2k/artshape-sound#v0.1.0
+    npm install github:onion2k/artshape-sound#v0.2.0
 
 It ships TypeScript sources rather than a build, and expects a bundler that compiles them, Vite as the other two do.
 Every file in `src/` is a public path: `artshape-sound/audio`, `artshape-sound/patches`, `artshape-sound/player`.
